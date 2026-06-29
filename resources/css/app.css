@@ -1,0 +1,480 @@
+@import "tailwindcss";
+
+/* ============================================
+   SAHAMBOARD — MASTER STYLESHEET (FINAL)
+   File ini GANTIKAN SELURUH ISI resources/css/app.css
+   Jangan digabung manual lagi dengan versi sebelumnya —
+   pakai file ini saja dari atas sampai bawah.
+   ============================================ */
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: #f8fafc;
+  color: #1e293b;
+  font-family: 'Inter', sans-serif;
+  margin: 0;
+  padding: 0;
+}
+
+/* ---------- App Shell & Sidebar ---------- */
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  width: 260px;
+  min-width: 260px;
+  background-color: #0f172a;
+  color: #94a3b8;
+  border-right: 1px solid #1e293b;
+  flex-shrink: 0;
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1.5rem;
+  border-bottom: 1px solid #1e293b;
+  background-color: #1e293b;
+}
+.logo-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #ffffff;
+  font-weight: 800;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  flex-shrink: 0;
+}
+.brand-text { font-weight: 700; color: #ffffff; font-size: 1.125rem; display: block; line-height: 1.3; }
+.brand-sub  { font-size: 0.75rem; color: #64748b; display: block; }
+
+.nav-section-label {
+  display: block;
+  padding: 1.25rem 1.5rem 0.5rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #475569;
+  font-weight: 700;
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1.5rem;
+  color: #94a3b8;
+  text-decoration: none;
+  transition: all 0.2s;
+  font-size: 0.925rem;
+}
+.nav-link:hover { background-color: #1e293b; color: #ffffff; }
+.nav-link.active {
+  background-color: rgba(59, 130, 246, 0.15);
+  color: #ffffff;
+  border-left: 3px solid #3b82f6;
+  padding-left: calc(1.5rem - 3px);
+}
+.nav-icon { font-size: 1.1rem; line-height: 1; display: inline-block; }
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 0.9rem 1.5rem;
+  font-size: 0.7rem;
+  color: #475569;
+  border-top: 1px solid #1e293b;
+}
+
+/* ---------- Main Content Wrapper ---------- */
+.main-content {
+  flex-grow: 1;
+  min-width: 0;
+  padding: 2rem;
+  background-color: #f8fafc;
+  overflow-y: auto;
+}
+
+/* ---------- Page Header ---------- */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+.page-header h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 0.25rem 0;
+  letter-spacing: -0.01em;
+}
+.page-header p {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #64748b;
+}
+.live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #059669;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.4rem 0.85rem;
+  border-radius: 999px;
+}
+.live-pill .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 0 0 rgba(16,185,129,0.6);
+  animation: pulse-dot 1.6s infinite;
+}
+@keyframes pulse-dot {
+  0%   { box-shadow: 0 0 0 0 rgba(16,185,129,0.55); }
+  70%  { box-shadow: 0 0 0 6px rgba(16,185,129,0); }
+  100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
+}
+
+/* ---------- Filter / Glass Card ---------- */
+.filter-card,
+.glass-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+  padding: 1.5rem 1.6rem;
+  margin-bottom: 1.5rem;
+}
+.filter-card h3,
+.glass-card h3 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 1.1rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.filter-card h3 .accent-bar,
+.glass-card h3 .accent-bar {
+  width: 4px;
+  height: 14px;
+  background: #2563eb;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+/* ---------- Form Grid & Groups ---------- */
+.form-grid,
+.filter-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-end;
+}
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.form-group label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+.form-group input,
+.form-group select {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  color: #1e293b;
+  padding: 0.6rem 0.8rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  min-width: 130px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+.form-group input::placeholder { color: #94a3b8; }
+.form-group input:focus,
+.form-group select:focus {
+  background: #ffffff;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.input-group { display: flex; gap: 0.4rem; }
+.input-group select {
+  width: 58px;
+  padding: 0.6rem 0.3rem;
+  text-align: center;
+  background: #eef2f7;
+}
+.input-group input { width: 140px; }
+
+/* ---------- Action Row & Buttons ---------- */
+.action-row {
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
+  margin-top: 0.75rem;
+}
+.btn {
+  padding: 0.62rem 1.4rem;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.15s, background 0.15s;
+}
+.btn-primary {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+.btn-primary:hover { box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4); transform: translateY(-1px); }
+
+.btn-secondary,
+.btn-ghost {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+.btn-secondary:hover,
+.btn-ghost:hover { background: #e2e8f0; color: #0f172a; }
+
+/* ---------- Info Banner ---------- */
+.info-banner {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+  font-size: 0.8125rem;
+  padding: 0.7rem 1rem;
+  border-radius: 10px;
+  margin-bottom: 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.info-banner.success {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #059669;
+}
+
+/* ---------- Table Container & Data Table ---------- */
+.table-container,
+.table-wrap {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
+  overflow-x: auto;
+}
+.data-table,
+table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 720px;
+}
+.data-table thead th,
+table thead th {
+  background: #0f172a;
+  color: #cbd5e1;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+  padding: 0.85rem 1rem;
+  text-align: center;
+  white-space: nowrap;
+  border-bottom: 1px solid #1e293b;
+}
+.data-table tbody td,
+table tbody td {
+  padding: 0.8rem 1rem;
+  font-size: 0.875rem;
+  color: #1e293b;
+  border-bottom: 1px solid #f1f5f9;
+}
+.data-table tbody tr:nth-child(even),
+table tbody tr:nth-child(even) { background: #f8fafc; }
+.data-table tbody tr:hover,
+table tbody tr:hover { background: #eff6ff; }
+
+.text-center { text-align: center; }
+.text-right  { text-align: right; font-variant-numeric: tabular-nums; }
+.text-green  { color: #059669; font-weight: 700; }
+.text-red    { color: #dc2626; font-weight: 700; }
+.text-gray   { color: #94a3b8; }
+
+.code-pill {
+  display: inline-block;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  font-weight: 700;
+  font-size: 0.78rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 6px;
+  letter-spacing: 0.02em;
+}
+
+.live-cell {
+  background: linear-gradient(90deg, #ecfdf5, #f8fffc);
+  font-weight: 700;
+  border-left: 2px solid #6ee7b7;
+}
+
+.status-chip {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
+  background: #f1f5f9;
+  color: #94a3b8;
+  border: 1px solid #e2e8f0;
+}
+
+.empty-row td {
+  text-align: center;
+  padding: 2.4rem 0;
+  color: #94a3b8;
+  font-size: 0.875rem;
+}
+
+/* ---------- KPI Cards ---------- */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.kpi-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
+  padding: 1.1rem 1.3rem;
+}
+.kpi-card .kpi-label {
+  font-size: 0.72rem;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.5rem;
+}
+.kpi-card .kpi-value { font-size: 1.4rem; font-weight: 700; color: #0f172a; }
+.kpi-card .kpi-value.green { color: #059669; }
+.kpi-card .kpi-value.red { color: #dc2626; }
+
+/* ---------- Chart Container ---------- */
+.chart-container {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
+  padding: 1.4rem 1.5rem;
+  height: 320px;
+  position: relative;
+  margin-bottom: 1.5rem;
+}
+
+/* ---------- Placeholder Box ---------- */
+.placeholder-box {
+  border: 1.5px dashed #cbd5e1;
+  border-radius: 14px;
+  padding: 3rem 1.2rem;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 0.875rem;
+  background: #f8fafc;
+}
+
+/* ---------- Responsive ---------- */
+/* ============================================
+   SIDEBAR TOGGLE (Buka/Tutup) — tambahan
+   Tempel di PALING BAWAH app.css (setelah semua CSS sebelumnya)
+   ============================================ */
+
+.sidebar {
+  transition: width 0.25s ease, min-width 0.25s ease, opacity 0.2s ease, padding 0.25s ease;
+  overflow: hidden;
+}
+
+/* Saat sidebar ditutup (.app-shell punya class "sidebar-collapsed") */
+.app-shell.sidebar-collapsed .sidebar {
+  width: 0;
+  min-width: 0;
+  border-right: none;
+  opacity: 0;
+}
+
+/* Tombol toggle (hamburger 3 garis) */
+.sidebar-toggle-btn {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  width: 38px;
+  height: 38px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06);
+}
+.sidebar-toggle-btn:hover { background: #f1f5f9; }
+.sidebar-toggle-btn span {
+  display: block;
+  width: 18px;
+  height: 2px;
+  background: #334155;
+  margin: 0 auto;
+  border-radius: 2px;
+}
+
+@media (max-width: 900px) {
+  /* Di mobile, sidebar default tertutup dan melayang di atas konten saat dibuka */
+  .sidebar {
+    position: fixed;
+    z-index: 50;
+    height: 100vh;
+    width: 0;
+    min-width: 0;
+    opacity: 0;
+  }
+  .app-shell:not(.sidebar-collapsed) .sidebar {
+    width: 260px;
+    min-width: 260px;
+    opacity: 1;
+  }
+  .app-shell.sidebar-collapsed .sidebar {
+    width: 0;
+    min-width: 0;
+    opacity: 0;
+  }
+}

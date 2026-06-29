@@ -1,0 +1,34 @@
+<?php
+
+use App\Http\Controllers\StockFilterController;
+use App\Http\Controllers\StockAnalysisController;
+use App\Http\Controllers\EntryPlanController;
+use App\Http\Controllers\LotSizingController;
+use App\Http\Controllers\MoneyManagementController;
+use App\Http\Controllers\WatchlistController;
+use Illuminate\Support\Facades\Route;
+
+/*
+|--------------------------------------------------------------------------
+| Web Routes — SahamBoard (versi lengkap, 6 fitur, dengan persistence)
+|--------------------------------------------------------------------------
+*/
+
+Route::get('/', [StockFilterController::class, 'index'])->name('index');
+
+Route::get('/analysis', [StockAnalysisController::class, 'index'])->name('analysis.index');
+
+Route::get('/entry', [EntryPlanController::class, 'index'])->name('entry.index');
+Route::post('/entry', [EntryPlanController::class, 'store'])->name('entry.store');
+Route::delete('/entry/{entryPlan}', [EntryPlanController::class, 'destroy'])->name('entry.destroy');
+
+Route::get('/lot-sizing', [LotSizingController::class, 'index'])->name('lotsizing.index');
+
+Route::get('/money-management', [MoneyManagementController::class, 'index'])->name('money-management.index');
+Route::post('/money-management', [MoneyManagementController::class, 'store'])->name('money-management.store');
+Route::post('/money-management/holding', [MoneyManagementController::class, 'storeHolding'])->name('money-management.holding.store');
+Route::delete('/money-management/holding/{holding}', [MoneyManagementController::class, 'destroyHolding'])->name('money-management.holding.destroy');
+
+Route::get('/watchlist', [WatchlistController::class, 'index'])->name('watchlist.index');
+Route::post('/watchlist', [WatchlistController::class, 'store'])->name('watchlist.store');
+Route::delete('/watchlist/{watchlist}', [WatchlistController::class, 'destroy'])->name('watchlist.destroy');
