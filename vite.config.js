@@ -14,5 +14,8 @@ export default defineConfig({
         watch: {
             ignored: ['**/storage/framework/views/**'],
         },
+        // Tambahkan baris di bawah ini agar build asset mengenali HTTPS produksi
+        hmr: true,
+        schemes: ['http', 'https'],
     },
 });
