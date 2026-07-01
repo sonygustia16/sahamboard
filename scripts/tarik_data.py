@@ -2,15 +2,20 @@
 import sys
 import time
 from datetime import date, timedelta
-import pymysql  # Menggunakan pymysql agar lebih stabil di Python 3.14
+import pymysql  # Tetap menggunakan pymysql
 from curl_cffi import requests
+from apscheduler.schedulers.blocking import BlockingScheduler
+from apscheduler.triggers.cron import CronTrigger
 
-# Konfigurasi MySQL - Sesuaikan dengan database Anda
+# ============================================================
+# PENTING: KARENA JALAN DI RAILWAY, GUNAKAN PORT INTERNAL (3306)
+# DAN HOST INTERNAL 'mysql.railway.internal' KARENA SATU JARINGAN
+# ============================================================
 DB_CONFIG = {
-    'host': 'localhost',
-    'user': 'root',
-    'password': '',
-    'database': 'saham_db',
+    'host': 'mysql.railway.internal', # Host internal untuk sesama server Railway
+    'user': 'root',                   # Sesuaikan jika user Anda berbeda
+    'password': 'nwjciFdGAdBfKPTwIyBYaIGDZxgnKgiD', # Ganti dengan password MySQL Railway Anda
+    'database': 'railway',            # Nama database Anda di Railway
     'port': 3306,
     'autocommit': True
 }
@@ -22,7 +27,6 @@ HEADERS = {
     'Referer': 'https://www.idx.co.id/id/data-pasar/ringkasan-perdagangan/ringkasan-saham',
     'Origin': 'https://www.idx.co.id',
 }
-
 
 def fetch_data_by_date(session, target_date_str):
     """Fungsi untuk menarik data dari API IDX berdasarkan tanggal"""
@@ -37,85 +41,36 @@ def fetch_data_by_date(session, target_date_str):
         print(f"❌ Error fetching {target_date_str}: {e}")
         return None
 
-
-def main():
-    print("🤖 Memulai Script Penarik Data Saham (Engine: PyMySQL)...")
-
-    # Inisialisasi session IDX
-    print("⏳ Menghubungkan ke server IDX...")
+def tugas_tarik_data():
+    print(f"\n⚡ [{date.today()}] Memulai penarikan data harian otomatis...")
+    
     session = requests.Session()
     try:
         session.get('https://www.idx.co.id/id', headers=HEADERS, impersonate='chrome', timeout=15)
     except Exception as e:
         print(f"❌ Gagal mengetuk server IDX: {e}")
 
-    # ============================================================
-    # MODE OTOMATIS:
-    # - "full"  -> tarik dari 2024-01-01 (backfill penuh, dipakai SEKALI di awal saja)
-    # - default -> cuma tarik 5 hari terakhir (mode harian, dipakai untuk update rutin)
-    #
-    # Contoh penggunaan:
-    #   python tarik_data.py full     -> backfill penuh (jalankan manual sekali)
-    #   python tarik_data.py          -> mode harian (cocok dijadwalkan tiap hari)
-    # ============================================================
-    if len(sys.argv) > 1 and sys.argv[1] == 'full':
-        start_date = date(2024, 1, 1)
-        print("📦 Mode: FULL BACKFILL (dari 2024-01-01, otomatis skip yang sudah ada)")
-    elif len(sys.argv) > 1 and sys.argv[1] == 'gap':
-        # Mode "gap": mulai dari tanggal terakhir yang ADA di database,
-        # cocok dipakai kalau kelewat lama nggak narik data (lebih cepat dari "full"
-        # karena tidak perlu loop+cek tanggal yang sudah pasti lama ada).
-        temp_conn = pymysql.connect(**DB_CONFIG)
-        temp_cursor = temp_conn.cursor()
-        temp_cursor.execute('SELECT MAX(date) FROM ringkasan_saham')
-        last_date = temp_cursor.fetchone()[0]
-        temp_cursor.close()
-        temp_conn.close()
-
-        if last_date:
-            start_date = last_date + timedelta(days=1)
-            print(f"📦 Mode: GAP-FILL (lanjut dari {start_date}, data terakhir di DB: {last_date})")
-        else:
-            start_date = date(2024, 1, 1)
-            print("📦 Mode: GAP-FILL (tabel masih kosong, mulai dari 2024-01-01)")
-    else:
-        start_date = date.today() - timedelta(days=5)
-        print("📦 Mode: HARIAN (5 hari terakhir saja, untuk update rutin)")
-
+    # Mode Harian: Menarik data 5 hari terakhir untuk jaga-jaga ada revisi/gap data
+    start_date = date.today() - timedelta(days=5)
     end_date = date.today()
     current_date = start_date
 
-    # Koneksi ke MySQL dengan PyMySQL
-    print("⏳ Menghubungkan ke database MySQL...")
     try:
         conn = pymysql.connect(**DB_CONFIG)
         cursor = conn.cursor()
-        print("✅ MySQL Terhubung!")
+        print("✅ Berhasil terhubung ke database Railway!")
     except Exception as e:
-        print(f"❌ GAGAL TERHUBUNG KE MYSQL! Masalahnya adalah: {e}")
-        input("\nTekan ENTER untuk keluar...")
+        print(f"❌ GAGAL TERHUBUNG KE MYSQL: {e}")
         return
 
     while current_date <= end_date:
-        # Skip hari Sabtu (5) dan Minggu (6) untuk menghemat kuota API
+        # Skip hari Sabtu & Minggu
         if current_date.weekday() in [5, 6]:
             current_date += timedelta(days=1)
             continue
 
         date_str = current_date.strftime('%Y-%m-%d')
-
-        # Cek apakah tanggal ini sudah ada di MySQL (skip kalau sudah, kecuali mode harian
-        # yang sengaja menarik ulang 5 hari terakhir untuk jaga-jaga ada data yang ke-update/revisi)
-        cursor.execute('SELECT COUNT(*) FROM ringkasan_saham WHERE date = %s', (date_str,))
-        already_exists = cursor.fetchone()[0] > 0
-
-        is_full_mode = len(sys.argv) > 1 and sys.argv[1] == 'full'
-        if already_exists and is_full_mode:
-            print(f'✅ {date_str}: Sudah ada di MySQL (Skipped)')
-            current_date += timedelta(days=1)
-            continue
-
-        print(f'⏳ Menarik data untuk tanggal: {date_str}...')
+        print(f'⏳ Memeriksa/Menarik data tanggal: {date_str}...')
         data = fetch_data_by_date(session, date_str)
 
         if not data or data.get('recordsTotal', 0) == 0:
@@ -131,14 +86,11 @@ def main():
                 row.get('Previous'), row.get('OpenPrice'), row.get('FirstTrade'),
                 row.get('High'), row.get('Low'), row.get('Close'), row.get('Change'),
                 row.get('Volume'), row.get('Value'), row.get('Frequency'),
-                row.get('IndexIndividual'),
-                row.get('Offer'), row.get('OfferVolume'),
-                row.get('Bid'), row.get('BidVolume'),
-                row.get('ListedShares'), row.get('TradebleShares'),
-                row.get('WeightForIndex'),
-                row.get('ForeignSell'), row.get('ForeignBuy'),
-                row.get('NonRegularVolume'), row.get('NonRegularValue'),
-                row.get('NonRegularFrequency'), row.get('Remarks'),
+                row.get('IndexIndividual'), row.get('Offer'), row.get('OfferVolume'),
+                row.get('Bid'), row.get('BidVolume'), row.get('ListedShares'), 
+                row.get('TradebleShares'), row.get('WeightForIndex'),
+                row.get('ForeignSell'), row.get('ForeignBuy'), row.get('NonRegularVolume'), 
+                row.get('NonRegularValue'), row.get('NonRegularFrequency'), row.get('Remarks'),
             ))
 
         query = """
@@ -150,18 +102,13 @@ def main():
                 non_regular_value, non_regular_frequency, remarks
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON DUPLICATE KEY UPDATE
-                stock_name=VALUES(stock_name),
-                previous=VALUES(previous),
-                close=VALUES(close),
-                `change`=VALUES(`change`),
-                volume=VALUES(volume),
-                `value`=VALUES(`value`),
-                frequency=VALUES(frequency);
+                stock_name=VALUES(stock_name), previous=VALUES(previous), close=VALUES(close),
+                `change`=VALUES(`change`), volume=VALUES(volume), `value`=VALUES(`value`), frequency=VALUES(frequency);
         """
 
         try:
             cursor.executemany(query, rows)
-            print(f'🚀 {date_str}: Sukses memasukkan/update {len(rows)} data saham.')
+            print(f'🚀 {date_str}: Sukses memperbarui {len(rows)} data saham.')
         except Exception as e:
             print(f'❌ Gagal menyimpan data tanggal {date_str}: {e}')
 
@@ -170,8 +117,25 @@ def main():
 
     cursor.close()
     conn.close()
-    print("✨ Selesai!")
-
+    print("✨ Selesai sinkronisasi data hari ini! Kembali standby...")
 
 if __name__ == '__main__':
-    main()
+    print("🤖 Engine Otomatisasi Penarik Data Aktif!")
+    
+    # Jalankan sekali di awal saat server dinyalakan agar data langsung up-to-date
+    tugas_tarik_data()
+    
+    # Daftarkan jadwal rutin harian
+    scheduler = BlockingScheduler()
+    
+    # Dijadwalkan Senin-Jumat pukul 17:30 WIB (Server Railway biasanya memakai zona waktu UTC, 17:30 WIB = 10:30 UTC)
+    # Kita kunci menggunakan timezone Asia/Jakarta agar akurat dengan jam lokal kita
+    trigger = CronTrigger(day_of_week='mon-fri', hour=17, minute=30, timezone='Asia/Jakarta')
+    
+    scheduler.add_job(tugas_tarik_data, trigger=trigger)
+    print("⏰ Jadwal Terpasang: Otomatis berjalan setiap Senin-Jumat jam 17:30 WIB.")
+    
+    try:
+        scheduler.start()
+    except (KeyboardInterrupt, SystemExit):
+        print("🤖 Engine Otomatisasi Dimatikan.")
