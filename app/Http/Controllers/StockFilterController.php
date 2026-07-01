@@ -38,22 +38,36 @@ class StockFilterController extends Controller
             || $filterFrequency != ''
             || $filterValue != '';
 
-        $query = RingkasanSaham::query()
-            ->stockCode($stockCode)
-            ->dateRange($startDate, $finishDate)
-            ->numericFilter('previous', $filterPrevious, $opPrevious)
-            ->numericFilter('frequency', $filterFrequency, $opFrequency)
-            ->numericFilter('value', $filterValue, $opValue);
+        // Inisialisasi awal query dasar
+        $query = RingkasanSaham::query();
 
-        // Limit disesuaikan dengan jenis pencarian:
-        // - Tanpa filter sama sekali -> 15 (default, biar ringan)
-        // - Ada filter periode tanggal (start_date & finish_date) -> 300
-        //   (PENTING: kalau limit terlalu kecil, tanggal terbaru bisa "menghabiskan"
-        //   semua slot duluan karena ORDER BY date DESC, jadi tanggal yang lebih lama
-        //   di dalam periode yang sama bisa tidak muncul sama sekali walau datanya ada)
-        // - Filter lain saja (stock code / previous / frequency / value) -> 50
+        // 1. Jalankan filter stock_code HANYA jika ada input teksnya
+        if (!empty($stockCode)) {
+            $query->where('stock_code', $stockCode);
+        }
+
+        // 2. Jalankan filter tanggal HANYA jika start dan finish diisi
+        if (!empty($startDate) && !empty($finishDate)) {
+            $query->whereBetween('date', [$startDate, $finishDate]);
+        }
+
+        // 3. Jalankan filter previous HANYA jika ada angkanya
+        if ($filterPrevious !== '') {
+            $query->where('previous', $opPrevious, $filterPrevious);
+        }
+
+        // 4. Jalankan filter frequency HANYA jika ada angkanya
+        if ($filterFrequency !== '') {
+            $query->where('frequency', $opFrequency, $filterFrequency);
+        }
+
+        // 5. Jalankan filter value HANYA jika ada angkanya
+        if ($filterValue !== '') {
+            $query->where('value', $opValue, $filterValue);
+        }
+
+        // Atur limit data agar tidak lemot
         $hasDateRange = $startDate != '' && $finishDate != '';
-
         if ($hasDateRange) {
             $limit = 300;
         } elseif ($isSearching) {
@@ -67,7 +81,7 @@ class StockFilterController extends Controller
             ->limit($limit)
             ->get();
 
-        // Ambil harga live, di-cache per kode saham (sama seperti perilaku lama)
+        // Ambil harga live, di-cache per kode saham
         $stockCodes = $rows->pluck('stock_code')->all();
         $livePriceCache = $this->yahoo->getLivePrices($stockCodes, 1);
 
