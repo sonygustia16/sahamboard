@@ -1,0 +1,1 @@
+worker: python tarik_data_auto.py
