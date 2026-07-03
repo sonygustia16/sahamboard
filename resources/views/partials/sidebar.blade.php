@@ -1,32 +1,36 @@
 <div class="sidebar">
     <div class="sidebar-brand">
-        <div class="logo-dot">SB</div>
-        <div>
-            <div class="brand-text">SahamBoard</div>
-            <div class="brand-sub">Pro Trader Suite</div>
-        </div>
+        <div class="sidebar-brand-left">
+    <div>
+        <div class="brand-text">Sony Gustia</div>
+        <div class="brand-sub">Pro Trader Suite</div>
+    </div>
+</div>
+        <button type="button" id="sidebarToggle" class="sidebar-toggle-btn" title="Tutup Menu">
+            <span></span><span></span><span></span>
+        </button>
     </div>
 
     <div class="nav-section-label">Riset & Screening</div>
     <a href="{{ route('index') }}" class="nav-link {{ request()->routeIs('index') ? 'active' : '' }}">
-        <span class="nav-icon">▤</span> Filter Lengkap
+        Filter Lengkap
     </a>
     <a href="{{ route('analysis.index') }}" class="nav-link {{ request()->routeIs('analysis.*') ? 'active' : '' }}">
-        <span class="nav-icon">📈</span> Analysis &amp; Chart
+        Analysis &amp; Chart
     </a>
     <a href="{{ route('watchlist.index') }}" class="nav-link {{ request()->routeIs('watchlist.*') ? 'active' : '' }}">
-        <span class="nav-icon">★</span> Watchlist
+        Watchlist
     </a>
 
     <div class="nav-section-label">Trading Plan</div>
     <a href="{{ route('entry.index') }}" class="nav-link {{ request()->routeIs('entry.*') ? 'active' : '' }}">
-        <span class="nav-icon">✎</span> Entry Plan
+        Entry Plan
     </a>
     <a href="{{ route('lotsizing.index') }}" class="nav-link {{ request()->routeIs('lotsizing.*') ? 'active' : '' }}">
-        <span class="nav-icon">⚖</span> Lot Sizing
+        Lot Sizing
     </a>
     <a href="{{ route('money-management.index') }}" class="nav-link {{ request()->routeIs('money-management.*') ? 'active' : '' }}">
-        <span class="nav-icon">◎</span> Money Management
+        Money Management
     </a>
 
     <div class="sidebar-footer">

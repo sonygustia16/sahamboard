@@ -1,8 +1,7 @@
 @extends('layouts.app')
 
-@section('title', 'Filter Lengkap')
-@section('page-title', 'Filter Data Saham — Screen 1')
-@section('page-subtitle', 'Pencarian multi-kriteria lengkap dengan harga live Yahoo Finance')
+@section('page-title', 'Analysis Pasar Nego')
+@section('page-subtitle', 'Analisis transaksi negosiasi saham secara real-time')
 
 @section('content')
 

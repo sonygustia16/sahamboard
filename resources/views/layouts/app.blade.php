@@ -12,19 +12,19 @@
 <body>
 <div class="app-shell" id="appShell">
 
+    <button type="button" id="sidebarReopen" class="sidebar-reopen-btn" title="Buka Menu">
+        <span></span><span></span><span></span>
+    </button>
+
     @include('partials.sidebar')
 
     <div class="main-content">
 
         <div class="page-header">
-            <div style="display:flex; align-items:flex-start; gap:0.9rem;">
-                <button type="button" id="sidebarToggle" class="sidebar-toggle-btn" title="Buka/Tutup Menu">
-                    <span></span><span></span><span></span>
-                </button>
-                <div>
-                    <h1>@yield('page-title')</h1>
-                    <p>@yield('page-subtitle')</p>
-                </div>
+            <div>
+                <span class="eyebrow">IDX · EQUITIES · SCREENER</span>
+                <h1>@yield('page-title')</h1>
+                <p>@yield('page-subtitle')</p>
             </div>
             <div class="live-pill"><span class="dot"></span> Live Yahoo Feed</div>
         </div>
@@ -44,6 +44,7 @@
 <script>
     const appShell = document.getElementById('appShell');
     const sidebarToggle = document.getElementById('sidebarToggle');
+    const sidebarReopen = document.getElementById('sidebarReopen');
     const SIDEBAR_KEY = 'sahamboard_sidebar_collapsed';
 
     function applySidebarState() {
@@ -53,10 +54,13 @@
     }
     applySidebarState();
 
-    sidebarToggle.addEventListener('click', function () {
+    function toggleSidebar() {
         appShell.classList.toggle('sidebar-collapsed');
         localStorage.setItem(SIDEBAR_KEY, appShell.classList.contains('sidebar-collapsed') ? '1' : '0');
-    });
+    }
+
+    sidebarToggle.addEventListener('click', toggleSidebar);
+    sidebarReopen.addEventListener('click', toggleSidebar);
 </script>
 </body>
 </html>
