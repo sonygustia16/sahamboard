@@ -62,8 +62,14 @@
         </form>
     </div>
 
+    {{-- Info banner — sekarang menampilkan info pagination --}}
     <div class="info-banner">
-        💡 Menampilkan <strong>{{ $rows->count() }}</strong> data terbaru untuk mencegah sistem lambat saat memuat harga Live Yahoo Finance.
+        💡 Menampilkan
+        <strong>{{ $rows->firstItem() ?? 0 }}–{{ $rows->lastItem() ?? 0 }}</strong>
+        dari <strong>{{ number_format($rows->total()) }}</strong> data
+        @if($rows->lastPage() > 1)
+            &nbsp;·&nbsp; Halaman <strong>{{ $rows->currentPage() }}</strong> dari <strong>{{ $rows->lastPage() }}</strong>
+        @endif
     </div>
 
     <div class="table-wrap">
@@ -104,9 +110,11 @@
                                 $changeClass = 'text-gray';
                             }
                         }
+                        // Nomor urut tetap benar saat pindah halaman
+                        $no = ($rows->currentPage() - 1) * $rows->perPage() + $loop->iteration;
                     @endphp
                     <tr>
-                        <td class="text-center"><strong>{{ $loop->iteration }}</strong></td>
+                        <td class="text-center"><strong>{{ $no }}</strong></td>
                         <td>{{ \Illuminate\Support\Carbon::parse($row->date)->format('d M y') }}</td>
                         <td><span class="code-pill">{{ $code }}</span></td>
                         <td class="text-right">{{ number_format($row->previous, 0, ',', '.') }}</td>
@@ -121,6 +129,53 @@
             </tbody>
         </table>
     </div>
+
+    {{-- Pagination — muncul hanya kalau lebih dari 1 halaman --}}
+    @if ($rows->lastPage() > 1)
+        <div class="pagination-wrap">
+            {{-- Prev --}}
+            @if ($rows->onFirstPage())
+                <span class="page-btn disabled">‹ Prev</span>
+            @else
+                <a href="{{ $rows->previousPageUrl() }}" class="page-btn">‹ Prev</a>
+            @endif
+
+            {{-- Nomor halaman dengan ellipsis --}}
+            @php
+                $start = max(1, $rows->currentPage() - 2);
+                $end   = min($rows->lastPage(), $rows->currentPage() + 2);
+            @endphp
+
+            @if ($start > 1)
+                <a href="{{ $rows->url(1) }}" class="page-btn">1</a>
+                @if ($start > 2)
+                    <span class="page-btn disabled">…</span>
+                @endif
+            @endif
+
+            @for ($i = $start; $i <= $end; $i++)
+                @if ($i == $rows->currentPage())
+                    <span class="page-btn active">{{ $i }}</span>
+                @else
+                    <a href="{{ $rows->url($i) }}" class="page-btn">{{ $i }}</a>
+                @endif
+            @endfor
+
+            @if ($end < $rows->lastPage())
+                @if ($end < $rows->lastPage() - 1)
+                    <span class="page-btn disabled">…</span>
+                @endif
+                <a href="{{ $rows->url($rows->lastPage()) }}" class="page-btn">{{ $rows->lastPage() }}</a>
+            @endif
+
+            {{-- Next --}}
+            @if ($rows->hasMorePages())
+                <a href="{{ $rows->nextPageUrl() }}" class="page-btn">Next ›</a>
+            @else
+                <span class="page-btn disabled">Next ›</span>
+            @endif
+        </div>
+    @endif
 
 @endsection
 
