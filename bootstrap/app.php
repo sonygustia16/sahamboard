@@ -1,10 +1,8 @@
 <?php
 
-use App\Http\Middleware\BasicAuthProtect;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
-use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Http\Request;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -26,11 +24,10 @@ return Application::configure(basePath: dirname(__DIR__))
                 | Request::HEADER_X_FORWARDED_PROTO
         );
 
-        // Kunci seluruh web dengan Basic Auth (kecuali /up health check,
-        // yang perlu tetap bisa diakses Railway tanpa auth untuk cek status).
-        $middleware->web(append: [
-            BasicAuthProtect::class,
-        ]);
+        // Catatan: proteksi login sekarang ditangani oleh middleware
+        // App\Http\Middleware\EnsureAuthenticated, dipasang per-grup route
+        // di routes/web.php (bukan global) supaya halaman /login sendiri
+        // tidak ikut ke-redirect (mencegah infinite redirect loop).
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

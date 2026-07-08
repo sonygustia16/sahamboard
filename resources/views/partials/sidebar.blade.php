@@ -35,5 +35,11 @@
 
     <div class="sidebar-footer">
         v1.0 (Laravel) · Data: Yahoo Finance Proxy
+        <form method="POST" action="{{ route('logout') }}" style="margin-top: 0.6rem;">
+            @csrf
+            <button type="submit" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:0.35rem 0.6rem;font-family:var(--mono);font-size:0.65rem;cursor:pointer;width:100%;">
+                Logout
+            </button>
+        </form>
     </div>
 </div>
