@@ -14,9 +14,13 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 */
 
-Route::get('/', [StockFilterController::class, 'index'])->name('index');
-
-Route::get('/analysis', [StockAnalysisController::class, 'index'])->name('analysis.index');
+// Rate limit lebih longgar untuk halaman yang manggil Yahoo Finance API,
+// supaya tidak gampang disalahgunakan untuk hammer request ke server eksternal.
+Route::middleware('throttle:60,1')->group(function () {
+    Route::get('/', [StockFilterController::class, 'index'])->name('index');
+    Route::get('/analysis', [StockAnalysisController::class, 'index'])->name('analysis.index');
+    Route::get('/watchlist', [WatchlistController::class, 'index'])->name('watchlist.index');
+});
 
 Route::get('/entry', [EntryPlanController::class, 'index'])->name('entry.index');
 Route::post('/entry', [EntryPlanController::class, 'store'])->name('entry.store');
@@ -29,6 +33,5 @@ Route::post('/money-management', [MoneyManagementController::class, 'store'])->n
 Route::post('/money-management/holding', [MoneyManagementController::class, 'storeHolding'])->name('money-management.holding.store');
 Route::delete('/money-management/holding/{holding}', [MoneyManagementController::class, 'destroyHolding'])->name('money-management.holding.destroy');
 
-Route::get('/watchlist', [WatchlistController::class, 'index'])->name('watchlist.index');
 Route::post('/watchlist', [WatchlistController::class, 'store'])->name('watchlist.store');
 Route::delete('/watchlist/{watchlist}', [WatchlistController::class, 'destroy'])->name('watchlist.destroy');

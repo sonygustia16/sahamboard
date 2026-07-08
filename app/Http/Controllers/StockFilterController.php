@@ -25,9 +25,9 @@ class StockFilterController extends Controller
         $filterFrequency = $this->cleanNumber($request->query('frequency', ''));
         $filterValue     = $this->cleanNumber($request->query('value', ''));
 
-        $opPrevious  = $request->query('op_previous', '=');
-        $opFrequency = $request->query('op_frequency', '=');
-        $opValue     = $request->query('op_value', '=');
+        $opPrevious  = $this->cleanOperator($request->query('op_previous', '='));
+        $opFrequency = $this->cleanOperator($request->query('op_frequency', '='));
+        $opValue     = $this->cleanOperator($request->query('op_value', '='));
 
         $isSearching = $stockCode != ''
             || ($startDate != '' && $finishDate != '')
@@ -90,5 +90,17 @@ class StockFilterController extends Controller
     private function cleanNumber($val)
     {
         return str_replace('.', '', (string) $val);
+    }
+
+    /**
+     * Whitelist operator perbandingan untuk query filter (previous/frequency/value).
+     * Meski Laravel query builder sudah punya proteksi internal untuk operator
+     * tidak valid, kita tetap validasi eksplisit di sini sebagai defense in depth
+     * dan supaya perilaku aplikasi jelas & terprediksi (bukan diam-diam fallback).
+     */
+    private function cleanOperator($op)
+    {
+        $allowed = ['=', '!=', '<', '<=', '>', '>='];
+        return in_array($op, $allowed, true) ? $op : '=';
     }
 }
