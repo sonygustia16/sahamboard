@@ -9,28 +9,6 @@
 
 @section('content')
 
-    {{-- Chart card — muncul begitu klik kode saham di tabel --}}
-    <div class="chart-container" id="chartCard" style="display:none;">
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.8rem;">
-            <div>
-                <span id="chartStockCode" style="font-family:var(--mono); font-weight:700; font-size:1.1rem; color:var(--ink);"></span>
-                <span style="color:var(--muted); font-size:0.8rem; margin-left:0.5rem;">Tren Value Transaksi</span>
-            </div>
-            <div id="timeframeButtons" style="display:flex; gap:0.3rem;">
-                <button type="button" class="btn btn-ghost tf-btn" data-tf="7d" style="padding:0.3rem 0.7rem; font-size:0.75rem;">7H</button>
-                <button type="button" class="btn btn-ghost tf-btn active" data-tf="1m" style="padding:0.3rem 0.7rem; font-size:0.75rem;">1M</button>
-                <button type="button" class="btn btn-ghost tf-btn" data-tf="3m" style="padding:0.3rem 0.7rem; font-size:0.75rem;">3M</button>
-                <button type="button" class="btn btn-ghost tf-btn" data-tf="6m" style="padding:0.3rem 0.7rem; font-size:0.75rem;">6M</button>
-                <button type="button" class="btn btn-ghost tf-btn" data-tf="1y" style="padding:0.3rem 0.7rem; font-size:0.75rem;">1Y</button>
-            </div>
-        </div>
-        <div style="position:relative; height:260px;">
-            <canvas id="clickChart"></canvas>
-        </div>
-        <div id="chartLoading" style="display:none; text-align:center; color:var(--muted); font-size:0.8rem; padding:0.5rem;">Memuat data...</div>
-        <div id="chartEmpty" style="display:none; text-align:center; color:var(--muted); font-size:0.8rem; padding:0.5rem;">Belum ada data historis untuk saham ini di rentang waktu tersebut.</div>
-    </div>
-
     <div class="glass-card">
         <h3><span class="accent-bar"></span>Kriteria Pencarian</h3>
         <form action="{{ route('index') }}" method="GET" onsubmit="clearThousandSeparators()">
@@ -86,6 +64,28 @@
                 <a href="{{ route('index') }}" class="btn btn-ghost">Reset</a>
             </div>
         </form>
+    </div>
+
+    {{-- Chart card — muncul begitu klik kode saham di tabel --}}
+    <div class="chart-container" id="chartCard" style="display:none;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.8rem;">
+            <div>
+                <span id="chartStockCode" style="font-family:var(--mono); font-weight:700; font-size:1.1rem; color:var(--ink);"></span>
+                <span style="color:var(--muted); font-size:0.8rem; margin-left:0.5rem;">Tren Value Transaksi</span>
+            </div>
+            <div id="timeframeButtons" style="display:flex; gap:0.3rem;">
+                <button type="button" class="btn btn-ghost tf-btn" data-tf="7d" style="padding:0.3rem 0.7rem; font-size:0.75rem;">7H</button>
+                <button type="button" class="btn btn-ghost tf-btn active" data-tf="1m" style="padding:0.3rem 0.7rem; font-size:0.75rem;">1M</button>
+                <button type="button" class="btn btn-ghost tf-btn" data-tf="3m" style="padding:0.3rem 0.7rem; font-size:0.75rem;">3M</button>
+                <button type="button" class="btn btn-ghost tf-btn" data-tf="6m" style="padding:0.3rem 0.7rem; font-size:0.75rem;">6M</button>
+                <button type="button" class="btn btn-ghost tf-btn" data-tf="1y" style="padding:0.3rem 0.7rem; font-size:0.75rem;">1Y</button>
+            </div>
+        </div>
+        <div style="position:relative; height:260px;">
+            <canvas id="clickChart"></canvas>
+        </div>
+        <div id="chartLoading" style="display:none; text-align:center; color:var(--muted); font-size:0.8rem; padding:0.5rem;">Memuat data...</div>
+        <div id="chartEmpty" style="display:none; text-align:center; color:var(--muted); font-size:0.8rem; padding:0.5rem;">Belum ada data historis untuk saham ini di rentang waktu tersebut.</div>
     </div>
 
     {{-- Info banner — sekarang menampilkan info pagination --}}
@@ -267,6 +267,16 @@
             });
     }
 
+    // Format angka besar jadi singkat: 1.250.000.000 -> 1,25 M | 850.000.000 -> 850 Jt | dst.
+    function formatSingkat(num) {
+        const abs = Math.abs(num);
+        if (abs >= 1e12) return (num / 1e12).toFixed(2).replace('.', ',') + ' T';
+        if (abs >= 1e9)  return (num / 1e9).toFixed(2).replace('.', ',') + ' M';
+        if (abs >= 1e6)  return (num / 1e6).toFixed(2).replace('.', ',') + ' Jt';
+        if (abs >= 1e3)  return (num / 1e3).toFixed(0) + ' Rb';
+        return new Intl.NumberFormat('id-ID').format(num);
+    }
+
     function renderClickChart(labels, values) {
         const ctx = document.getElementById('clickChart').getContext('2d');
 
@@ -312,7 +322,7 @@
                         grid: { color: 'rgba(148,163,184,0.08)' },
                         ticks: {
                             color: '#64748b',
-                            callback: function(value) { return new Intl.NumberFormat('id-ID').format(value); }
+                            callback: function(value) { return formatSingkat(value); }
                         }
                     }
                 },
@@ -327,7 +337,7 @@
                         padding: 10,
                         callbacks: {
                             label: function(context) {
-                                return 'Value: Rp ' + new Intl.NumberFormat('id-ID').format(context.raw);
+                                return 'Value: Rp ' + formatSingkat(context.raw);
                             }
                         }
                     }
