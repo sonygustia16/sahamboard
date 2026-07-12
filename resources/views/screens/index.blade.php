@@ -3,7 +3,33 @@
 @section('page-title', 'Analysis Pasar Nego')
 @section('page-subtitle', 'Analisis transaksi negosiasi saham secara real-time')
 
+@push('head-scripts')
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+@endpush
+
 @section('content')
+
+    {{-- Chart card — muncul begitu klik kode saham di tabel --}}
+    <div class="chart-container" id="chartCard" style="display:none;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.8rem;">
+            <div>
+                <span id="chartStockCode" style="font-family:var(--mono); font-weight:700; font-size:1.1rem; color:var(--ink);"></span>
+                <span style="color:var(--muted); font-size:0.8rem; margin-left:0.5rem;">Tren Value Transaksi</span>
+            </div>
+            <div id="timeframeButtons" style="display:flex; gap:0.3rem;">
+                <button type="button" class="btn btn-ghost tf-btn" data-tf="7d" style="padding:0.3rem 0.7rem; font-size:0.75rem;">7H</button>
+                <button type="button" class="btn btn-ghost tf-btn active" data-tf="1m" style="padding:0.3rem 0.7rem; font-size:0.75rem;">1M</button>
+                <button type="button" class="btn btn-ghost tf-btn" data-tf="3m" style="padding:0.3rem 0.7rem; font-size:0.75rem;">3M</button>
+                <button type="button" class="btn btn-ghost tf-btn" data-tf="6m" style="padding:0.3rem 0.7rem; font-size:0.75rem;">6M</button>
+                <button type="button" class="btn btn-ghost tf-btn" data-tf="1y" style="padding:0.3rem 0.7rem; font-size:0.75rem;">1Y</button>
+            </div>
+        </div>
+        <div style="position:relative; height:260px;">
+            <canvas id="clickChart"></canvas>
+        </div>
+        <div id="chartLoading" style="display:none; text-align:center; color:var(--muted); font-size:0.8rem; padding:0.5rem;">Memuat data...</div>
+        <div id="chartEmpty" style="display:none; text-align:center; color:var(--muted); font-size:0.8rem; padding:0.5rem;">Belum ada data historis untuk saham ini di rentang waktu tersebut.</div>
+    </div>
 
     <div class="glass-card">
         <h3><span class="accent-bar"></span>Kriteria Pencarian</h3>
@@ -113,7 +139,7 @@
                         // Nomor urut tetap benar saat pindah halaman
                         $no = ($rows->currentPage() - 1) * $rows->perPage() + $loop->iteration;
                     @endphp
-                    <tr>
+                    <tr class="clickable-row" data-code="{{ $code }}" onclick="selectStock('{{ $code }}')" style="cursor:pointer;">
                         <td class="text-center"><strong>{{ $no }}</strong></td>
                         <td>{{ \Illuminate\Support\Carbon::parse($row->date)->format('d M y') }}</td>
                         <td><span class="code-pill">{{ $code }}</span></td>
@@ -191,5 +217,138 @@
     function clearThousandSeparators() {
         inputs.forEach(input => { input.value = input.value.replace(/\./g, ""); });
     }
+
+    // ══ Klik-langsung-chart dengan timeframe selector ══
+    let clickChartInstance = null;
+    let activeStockCode = null;
+    let activeTimeframe = '1m';
+
+    function selectStock(code) {
+        activeStockCode = code;
+
+        // highlight baris aktif
+        document.querySelectorAll('.clickable-row').forEach(tr => tr.classList.remove('active-row'));
+        document.querySelectorAll(`.clickable-row[data-code="${code}"]`).forEach(tr => tr.classList.add('active-row'));
+
+        document.getElementById('chartCard').style.display = 'block';
+        document.getElementById('chartStockCode').textContent = code;
+        document.getElementById('chartCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+        loadChartData(code, activeTimeframe);
+    }
+
+    function loadChartData(code, timeframe) {
+        const loadingEl = document.getElementById('chartLoading');
+        const emptyEl = document.getElementById('chartEmpty');
+        const canvas = document.getElementById('clickChart');
+
+        loadingEl.style.display = 'block';
+        emptyEl.style.display = 'none';
+        canvas.style.display = 'block';
+
+        fetch(`/chart-data/${code}?timeframe=${timeframe}`, { headers: { 'Accept': 'application/json' } })
+            .then(res => res.json())
+            .then(data => {
+                loadingEl.style.display = 'none';
+
+                if (!data.values || data.values.length === 0) {
+                    canvas.style.display = 'none';
+                    emptyEl.style.display = 'block';
+                    return;
+                }
+
+                renderClickChart(data.labels, data.values);
+            })
+            .catch(() => {
+                loadingEl.style.display = 'none';
+                emptyEl.textContent = 'Gagal memuat data chart. Coba lagi.';
+                emptyEl.style.display = 'block';
+                canvas.style.display = 'none';
+            });
+    }
+
+    function renderClickChart(labels, values) {
+        const ctx = document.getElementById('clickChart').getContext('2d');
+
+        if (clickChartInstance) {
+            clickChartInstance.destroy();
+        }
+
+        const gradient = ctx.createLinearGradient(0, 0, 0, 260);
+        gradient.addColorStop(0, 'rgba(34, 211, 238, 0.35)');
+        gradient.addColorStop(0.6, 'rgba(34, 211, 238, 0.08)');
+        gradient.addColorStop(1, 'rgba(34, 211, 238, 0.00)');
+
+        Chart.defaults.color = '#94a3b8';
+        Chart.defaults.font.family = "'Inter', sans-serif";
+
+        clickChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Value',
+                    data: values,
+                    borderColor: '#22d3ee',
+                    borderWidth: 2.5,
+                    pointRadius: 0,
+                    pointHoverRadius: 6,
+                    pointHoverBackgroundColor: '#22d3ee',
+                    pointHoverBorderColor: '#fff',
+                    pointHoverBorderWidth: 2,
+                    fill: true,
+                    backgroundColor: gradient,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    x: { grid: { display: false }, ticks: { color: '#64748b', maxRotation: 0 } },
+                    y: {
+                        beginAtZero: false,
+                        grid: { color: 'rgba(148,163,184,0.08)' },
+                        ticks: {
+                            color: '#64748b',
+                            callback: function(value) { return new Intl.NumberFormat('id-ID').format(value); }
+                        }
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#1e293b',
+                        borderColor: 'rgba(34,211,238,0.3)',
+                        borderWidth: 1,
+                        titleColor: '#fff',
+                        bodyColor: '#e2e8f0',
+                        padding: 10,
+                        callbacks: {
+                            label: function(context) {
+                                return 'Value: Rp ' + new Intl.NumberFormat('id-ID').format(context.raw);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    document.querySelectorAll('.tf-btn').forEach(btn => {
+        btn.addEventListener('click', function () {
+            document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            activeTimeframe = this.dataset.tf;
+            if (activeStockCode) {
+                loadChartData(activeStockCode, activeTimeframe);
+            }
+        });
+    });
 </script>
+<style>
+    .tf-btn.active { background: var(--cyan); color: #0a0e1a; border-color: var(--cyan); }
+    tr.active-row td { background: rgba(34,211,238,0.08) !important; box-shadow: inset 3px 0 0 var(--cyan); }
+</style>
 @endpush

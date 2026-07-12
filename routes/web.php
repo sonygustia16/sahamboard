@@ -29,6 +29,7 @@ Route::middleware(EnsureAuthenticated::class)->group(function () {
     // supaya tidak gampang disalahgunakan untuk hammer request ke server eksternal.
     Route::middleware('throttle:60,1')->group(function () {
         Route::get('/', [StockFilterController::class, 'index'])->name('index');
+        Route::get('/chart-data/{stockCode}', [StockFilterController::class, 'chartData'])->name('chart-data');
         Route::get('/analysis', [StockAnalysisController::class, 'index'])->name('analysis.index');
         Route::get('/watchlist', [WatchlistController::class, 'index'])->name('watchlist.index');
     });
@@ -44,6 +45,7 @@ Route::middleware(EnsureAuthenticated::class)->group(function () {
     Route::post('/money-management/holding', [MoneyManagementController::class, 'storeHolding'])->name('money-management.holding.store');
     Route::delete('/money-management/holding/{holding}', [MoneyManagementController::class, 'destroyHolding'])->name('money-management.holding.destroy');
 
+    Route::get('/watchlist/alerts-check', [WatchlistController::class, 'alertsCheck'])->name('watchlist.alerts-check');
     Route::post('/watchlist', [WatchlistController::class, 'store'])->name('watchlist.store');
     Route::delete('/watchlist/{watchlist}', [WatchlistController::class, 'destroy'])->name('watchlist.destroy');
 });

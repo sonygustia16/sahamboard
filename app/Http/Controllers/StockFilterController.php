@@ -87,6 +87,33 @@ class StockFilterController extends Controller
         ]);
     }
 
+    /**
+     * Endpoint JSON ringan untuk chart klik-langsung di tabel filter.
+     * Dipanggil via fetch() dari JS, bukan reload halaman.
+     * Data selalu dari tabel ringkasan_saham (database), bukan hardcode.
+     */
+    public function chartData(Request $request, string $stockCode)
+    {
+        $stockCode = strtoupper($stockCode);
+        $timeframe = $request->query('timeframe', '1m');
+
+        $daysMap = ['7d' => 7, '1m' => 30, '3m' => 90, '6m' => 180, '1y' => 365];
+        $days = $daysMap[$timeframe] ?? 30;
+
+        $rows = RingkasanSaham::query()
+            ->where('stock_code', $stockCode)
+            ->where('date', '>=', now()->subDays($days)->toDateString())
+            ->orderBy('date', 'asc')
+            ->get(['date', 'value']);
+
+        return response()->json([
+            'stock_code' => $stockCode,
+            'timeframe'  => $timeframe,
+            'labels'     => $rows->map(fn ($r) => \Illuminate\Support\Carbon::parse($r->date)->format('d M y'))->all(),
+            'values'     => $rows->map(fn ($r) => (float) $r->value)->all(),
+        ]);
+    }
+
     private function cleanNumber($val)
     {
         return str_replace('.', '', (string) $val);
