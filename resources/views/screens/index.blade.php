@@ -11,7 +11,25 @@
 
     <div class="glass-card">
         <h3><span class="accent-bar"></span>Kriteria Pencarian</h3>
-        <form action="{{ route('index') }}" method="GET" onsubmit="clearThousandSeparators()">
+
+        {{-- Preset filter tersimpan — klik untuk langsung isi & jalankan filter --}}
+        @if($savedFilters->count() > 0)
+        <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:1rem;">
+            @foreach($savedFilters as $preset)
+                <div style="display:flex; align-items:center; gap:0.3rem; background:var(--panel-2); border:1px solid var(--border); border-radius:999px; padding:0.3rem 0.4rem 0.3rem 0.9rem;">
+                    <button type="button" onclick="applyPreset({{ $preset->id }})" style="background:none; border:none; color:var(--cyan); font-size:0.8rem; font-weight:600; cursor:pointer; font-family:var(--body);">
+                        {{ $preset->name }}
+                    </button>
+                    <form action="{{ route('filter-preset.destroy', $preset->id) }}" method="POST" onsubmit="return confirm('Hapus preset {{ $preset->name }}?')" style="display:inline;">
+                        @csrf @method('DELETE')
+                        <button type="submit" style="background:none; border:none; color:var(--muted); font-size:0.75rem; cursor:pointer; padding:0.2rem 0.4rem;" title="Hapus preset">✕</button>
+                    </form>
+                </div>
+            @endforeach
+        </div>
+        @endif
+
+        <form action="{{ route('index') }}" method="GET" onsubmit="clearThousandSeparators()" id="filterForm">
             <div class="filter-grid">
                 <div class="form-group">
                     <label>Start Date</label>
@@ -62,9 +80,22 @@
             <div class="action-row">
                 <button type="submit" class="btn btn-primary">Cari / Filter</button>
                 <a href="{{ route('index') }}" class="btn btn-ghost">Reset</a>
+                <button type="button" class="btn btn-ghost" onclick="openSavePresetPrompt()">💾 Simpan sebagai Preset</button>
             </div>
         </form>
     </div>
+
+    {{-- Form tersembunyi buat submit preset baru --}}
+    <form action="{{ route('filter-preset.store') }}" method="POST" id="savePresetForm" style="display:none;">
+        @csrf
+        <input type="hidden" name="name" id="presetNameInput">
+        <input type="hidden" name="op_previous" id="presetOpPrevious">
+        <input type="hidden" name="previous" id="presetPrevious">
+        <input type="hidden" name="op_frequency" id="presetOpFrequency">
+        <input type="hidden" name="frequency" id="presetFrequency">
+        <input type="hidden" name="op_value" id="presetOpValue">
+        <input type="hidden" name="value" id="presetValue">
+    </form>
 
     {{-- Chart card — muncul begitu klik kode saham di tabel --}}
     <div class="chart-container" id="chartCard" style="display:none;">
@@ -207,6 +238,46 @@
 
 @push('body-scripts')
 <script>
+    // Data preset dari server (untuk applyPreset)
+    const SAVED_FILTERS = {!! $savedFilters->map(fn($p) => [
+        'id' => $p->id,
+        'op_previous' => $p->op_previous,
+        'previous' => $p->previous,
+        'op_frequency' => $p->op_frequency,
+        'frequency' => $p->frequency,
+        'op_value' => $p->op_value,
+        'value' => $p->value,
+    ])->values()->toJson() !!};
+
+    function applyPreset(id) {
+        const preset = SAVED_FILTERS.find(p => p.id === id);
+        if (!preset) return;
+
+        document.querySelector('[name="op_previous"]').value = preset.op_previous || '=';
+        document.querySelector('[name="previous"]').value = preset.previous ? new Intl.NumberFormat('id-ID').format(preset.previous) : '';
+        document.querySelector('[name="op_frequency"]').value = preset.op_frequency || '=';
+        document.querySelector('[name="frequency"]').value = preset.frequency ? new Intl.NumberFormat('id-ID').format(preset.frequency) : '';
+        document.querySelector('[name="op_value"]').value = preset.op_value || '=';
+        document.querySelector('[name="value"]').value = preset.value ? new Intl.NumberFormat('id-ID').format(preset.value) : '';
+
+        document.getElementById('filterForm').requestSubmit();
+    }
+
+    function openSavePresetPrompt() {
+        const name = prompt('Nama preset ini (contoh: "Saham likuid tinggi"):');
+        if (!name || !name.trim()) return;
+
+        document.getElementById('presetNameInput').value = name.trim();
+        document.getElementById('presetOpPrevious').value = document.querySelector('[name="op_previous"]').value;
+        document.getElementById('presetPrevious').value = document.querySelector('[name="previous"]').value;
+        document.getElementById('presetOpFrequency').value = document.querySelector('[name="op_frequency"]').value;
+        document.getElementById('presetFrequency').value = document.querySelector('[name="frequency"]').value;
+        document.getElementById('presetOpValue').value = document.querySelector('[name="op_value"]').value;
+        document.getElementById('presetValue').value = document.querySelector('[name="value"]').value;
+
+        document.getElementById('savePresetForm').submit();
+    }
+
     const inputs = document.querySelectorAll('.rupiah-input');
     inputs.forEach(input => {
         input.addEventListener('input', function() {

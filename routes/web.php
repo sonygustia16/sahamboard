@@ -34,6 +34,9 @@ Route::middleware(EnsureAuthenticated::class)->group(function () {
         Route::get('/watchlist', [WatchlistController::class, 'index'])->name('watchlist.index');
     });
 
+    Route::post('/filter-preset', [StockFilterController::class, 'storePreset'])->name('filter-preset.store');
+    Route::delete('/filter-preset/{savedFilter}', [StockFilterController::class, 'destroyPreset'])->name('filter-preset.destroy');
+
     Route::get('/entry', [EntryPlanController::class, 'index'])->name('entry.index');
     Route::post('/entry', [EntryPlanController::class, 'store'])->name('entry.store');
     Route::delete('/entry/{entryPlan}', [EntryPlanController::class, 'destroy'])->name('entry.destroy');

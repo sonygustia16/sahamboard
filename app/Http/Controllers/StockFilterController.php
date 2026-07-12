@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\RingkasanSaham;
+use App\Models\SavedFilter;
 use App\Services\YahooFinanceService;
 use Illuminate\Http\Request;
 
@@ -84,7 +85,43 @@ class StockFilterController extends Controller
             'opFrequency'     => $opFrequency,
             'opValue'         => $opValue,
             'isSearching'     => $isSearching,
+            'savedFilters'    => SavedFilter::orderBy('name')->get(),
         ]);
+    }
+
+    /**
+     * Simpan kombinasi filter (previous/frequency/value + operator) sebagai preset
+     * bernama, supaya bisa dipanggil ulang tanpa isi ulang form tiap login.
+     */
+    public function storePreset(Request $request)
+    {
+        $validated = $request->validate([
+            'name'         => 'required|string|max:100',
+            'op_previous'  => 'nullable|in:=,!=,<,<=,>,>=',
+            'previous'     => 'nullable|string',
+            'op_frequency' => 'nullable|in:=,!=,<,<=,>,>=',
+            'frequency'    => 'nullable|string',
+            'op_value'     => 'nullable|in:=,!=,<,<=,>,>=',
+            'value'        => 'nullable|string',
+        ]);
+
+        SavedFilter::create([
+            'name'         => $validated['name'],
+            'op_previous'  => $validated['op_previous'] ?? '=',
+            'previous'     => $this->cleanNumber($validated['previous'] ?? '') ?: null,
+            'op_frequency' => $validated['op_frequency'] ?? '=',
+            'frequency'    => $this->cleanNumber($validated['frequency'] ?? '') ?: null,
+            'op_value'     => $validated['op_value'] ?? '=',
+            'value'        => $this->cleanNumber($validated['value'] ?? '') ?: null,
+        ]);
+
+        return redirect()->route('index')->with('success', 'Preset filter tersimpan.');
+    }
+
+    public function destroyPreset(SavedFilter $savedFilter)
+    {
+        $savedFilter->delete();
+        return redirect()->route('index')->with('success', 'Preset filter dihapus.');
     }
 
     /**
