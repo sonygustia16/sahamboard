@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
-@section('page-title', 'Analysis Pasar Nego')
-@section('page-subtitle', 'Analisis transaksi negosiasi saham secara real-time')
+@section('page-title', 'Screening')
+@section('page-subtitle', 'Cari saham berpotensi akumulasi & pantau tren value transaksi')
 
 @push('head-scripts')
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -29,7 +29,7 @@
         </div>
         @endif
 
-        <form action="{{ route('index') }}" method="GET" onsubmit="clearThousandSeparators()" id="filterForm">
+        <form action="{{ route('screening.index') }}" method="GET" onsubmit="clearThousandSeparators()" id="filterForm">
             <div class="filter-grid">
                 <div class="form-group">
                     <label>Start Date</label>
@@ -78,9 +78,18 @@
                 </div>
             </div>
 
+            {{-- Screening otomatis: cari saham dengan pola Close turun + Value NR naik --}}
+            <div style="margin-top:1rem; padding:0.7rem 0.9rem; background:var(--panel-2); border:1px solid var(--border); border-radius:8px; display:flex; align-items:center; gap:0.6rem;">
+                <input type="checkbox" name="screening" value="akumulasi" id="screeningCheckbox" {{ $screening === 'akumulasi' ? 'checked' : '' }} style="width:16px; height:16px; accent-color: var(--cyan); cursor:pointer;">
+                <label for="screeningCheckbox" style="cursor:pointer; font-size:0.85rem; color:var(--ink); margin:0;">
+                    🔍 <strong>Screening: Berpotensi Akumulasi</strong>
+                    <span style="color:var(--muted); font-size:0.75rem; display:block;">Tampilkan saham yang Close-nya turun tapi Value NR naik dibanding hari transaksi sebelumnya</span>
+                </label>
+            </div>
+
             <div class="action-row">
                 <button type="submit" class="btn btn-primary">Cari / Filter</button>
-                <a href="{{ route('index') }}" class="btn btn-ghost">Reset</a>
+                <a href="{{ route('screening.index') }}" class="btn btn-ghost">Reset</a>
                 <button type="button" class="btn btn-ghost" onclick="openSavePresetPrompt()">💾 Simpan sebagai Preset</button>
             </div>
         </form>
@@ -114,12 +123,28 @@
             </div>
         </div>
 
+        {{-- Badge sinyal otomatis: bandingkan tren Value NR vs Close Price --}}
+        <div id="signalBadge" style="display:none; margin-bottom:0.8rem; padding:0.6rem 0.9rem; border-radius:8px; font-size:0.8rem; font-weight:600;"></div>
+
         <div style="position:relative; height:260px;">
             <canvas id="clickChart"></canvas>
         </div>
         <div id="chartLoading" style="display:none; text-align:center; color:var(--muted); font-size:0.8rem; padding:0.5rem;">Memuat data...</div>
         <div id="chartEmpty" style="display:none; text-align:center; color:var(--muted); font-size:0.8rem; padding:0.5rem;">Belum ada data historis untuk saham ini di rentang waktu tersebut.</div>
+
+        {{-- Panduan cara baca sinyal — selalu tampil sebagai referensi --}}
+        <div style="margin-top:0.8rem; padding:0.7rem 0.9rem; background:var(--panel-2); border:1px solid var(--border); border-radius:8px; font-size:0.72rem; color:var(--muted); line-height:1.6;">
+            <strong style="color:var(--ink);">Cara baca:</strong>
+            <span style="color:#10b981;">🟢 Close turun, Value NR naik</span> → berpotensi akumulasi (bagus, banyak transaksi meski harga ditekan turun).
+            <span style="color:#f59e0b;">🟡 Close naik, Value NR turun</span> → hati-hati (kenaikan harga tidak didukung transaksi besar, rawan tidak solid).
+        </div>
     </div>
+
+    @if($screening === 'akumulasi')
+        <div style="background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.35); border-radius: 8px; padding: 0.7rem 1rem; margin-bottom: 0.8rem; color: #10b981; font-size: 0.85rem;">
+            🟢 <strong>Mode Screening Aktif: Berpotensi Akumulasi</strong> — menampilkan saham dengan Close turun & Value NR naik pada tanggal <strong>{{ \Illuminate\Support\Carbon::parse($screeningDate)->format('d M Y') }}</strong> dibanding hari transaksi sebelumnya.
+        </div>
+    @endif
 
     {{-- Info banner — sekarang menampilkan info pagination --}}
     <div class="info-banner">
@@ -327,10 +352,12 @@
                 if (!data.values || data.values.length === 0) {
                     canvas.style.display = 'none';
                     emptyEl.style.display = 'block';
+                    document.getElementById('signalBadge').style.display = 'none';
                     return;
                 }
 
                 renderClickChart(data.labels, data.values, data.closes);
+                updateSignalBadge(data.values, data.closes);
             })
             .catch(() => {
                 loadingEl.style.display = 'none';
@@ -340,8 +367,8 @@
             });
     }
 
-    // Format angka besar jadi singkat: 1.250.000.000 -> 1,25 M | 850.000.000 -> 850 Jt | dst.
-    // Ambang batas minimum supaya sinyal tooltip cuma nangkep SPIKE beneran, bukan selisih tipis/noise.
+    // Ambang batas minimum supaya cuma nangkep SPIKE beneran, bukan selisih tipis/noise.
+    // Value NR wajar naik-turun drastis (bisa berkali lipat), makanya thresholdnya lebih besar dari Close.
     const SIGNAL_VALUE_PCT_THRESHOLD = 50; // Value NR harus berubah minimal 50%
     const SIGNAL_CLOSE_PCT_THRESHOLD = 1;  // Close harus berubah minimal 1%
 
@@ -350,6 +377,51 @@
         return ((to - from) / Math.abs(from)) * 100;
     }
 
+    // Bandingkan arah tren Value NR vs Close Price, lalu tampilkan sinyal.
+    // Pakai rata-rata 20% data awal vs 20% data akhir supaya tidak terpengaruh 1 lonjakan tunggal (noise),
+    // dan cuma dianggap sinyal valid kalau persentase perubahannya melewati threshold di atas.
+    function trendPercent(arr) {
+        const clean = arr.filter(v => v !== null && !isNaN(v));
+        if (clean.length < 2) return 0;
+        const n = clean.length;
+        const chunk = Math.max(1, Math.floor(n * 0.2));
+        const head = clean.slice(0, chunk).reduce((a, b) => a + b, 0) / chunk;
+        const tail = clean.slice(-chunk).reduce((a, b) => a + b, 0) / chunk;
+        return pctChange(head, tail);
+    }
+
+    function updateSignalBadge(values, closes) {
+        const badge = document.getElementById('signalBadge');
+        const valuePct = trendPercent(values);
+        const closePct = trendPercent(closes);
+
+        const valueSpikeUp = valuePct >= SIGNAL_VALUE_PCT_THRESHOLD;
+        const valueSpikeDown = valuePct <= -SIGNAL_VALUE_PCT_THRESHOLD;
+        const closeMoveUp = closePct >= SIGNAL_CLOSE_PCT_THRESHOLD;
+        const closeMoveDown = closePct <= -SIGNAL_CLOSE_PCT_THRESHOLD;
+
+        if (closeMoveDown && valueSpikeUp) {
+            badge.style.display = 'block';
+            badge.style.background = 'rgba(16,185,129,0.12)';
+            badge.style.border = '1px solid rgba(16,185,129,0.4)';
+            badge.style.color = '#10b981';
+            badge.innerHTML = `🟢 Berpotensi Akumulasi — Close turun ${closePct.toFixed(1)}%, Value NR naik ${valuePct.toFixed(0)}%. Transaksi melonjak signifikan walau harga tertekan, bisa jadi tanda bandar sedang mengumpulkan.`;
+        } else if (closeMoveUp && valueSpikeDown) {
+            badge.style.display = 'block';
+            badge.style.background = 'rgba(245,158,11,0.12)';
+            badge.style.border = '1px solid rgba(245,158,11,0.4)';
+            badge.style.color = '#f59e0b';
+            badge.innerHTML = `🟡 Hati-hati — Close naik ${closePct.toFixed(1)}%, Value NR turun ${Math.abs(valuePct).toFixed(0)}%. Kenaikan harga tidak didukung transaksi besar, waspada potensi tidak solid.`;
+        } else {
+            badge.style.display = 'block';
+            badge.style.background = 'rgba(148,163,184,0.10)';
+            badge.style.border = '1px solid var(--border)';
+            badge.style.color = 'var(--muted)';
+            badge.innerHTML = '⚪ Tidak ada sinyal divergensi signifikan pada rentang waktu ini.';
+        }
+    }
+
+    // Format angka besar jadi singkat: 1.250.000.000 -> 1,25 M | 850.000.000 -> 850 Jt | dst.
     function formatSingkat(num) {
         const abs = Math.abs(num);
         if (abs >= 1e12) return (num / 1e12).toFixed(2).replace('.', ',') + ' T';

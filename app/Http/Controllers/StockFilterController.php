@@ -6,6 +6,7 @@ use App\Models\RingkasanSaham;
 use App\Models\SavedFilter;
 use App\Services\YahooFinanceService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class StockFilterController extends Controller
 {
@@ -18,9 +19,26 @@ class StockFilterController extends Controller
 
     public function index(Request $request)
     {
+        // Halaman Filter Lengkap: sengaja TIDAK mengaktifkan mode screening akumulasi,
+        // supaya halaman ini tetap simpel & tidak terganggu logika screening.
+        return $this->handleFilterRequest($request, false, 'screens.index');
+    }
+
+    /**
+     * Halaman Screening (dulu "Analysis & Chart"): sama persis dengan Filter Lengkap,
+     * tapi mendukung mode screening akumulasi (checkbox "Berpotensi Akumulasi").
+     */
+    public function screening(Request $request)
+    {
+        return $this->handleFilterRequest($request, true, 'screens.screening');
+    }
+
+    private function handleFilterRequest(Request $request, bool $allowScreening, string $viewName)
+    {
         $stockCode   = $request->query('stock_code', '');
         $startDate   = $request->query('start_date', '');
         $finishDate  = $request->query('finish_date', '');
+        $screening   = $allowScreening ? $request->query('screening', '') : '';
 
         $filterPrevious  = $this->cleanNumber($request->query('previous', ''));
         $filterFrequency = $this->cleanNumber($request->query('frequency', ''));
@@ -34,7 +52,72 @@ class StockFilterController extends Controller
             || ($startDate != '' && $finishDate != '')
             || $filterPrevious != ''
             || $filterFrequency != ''
-            || $filterValue != '';
+            || $filterValue != ''
+            || $screening != '';
+
+        if ($screening === 'akumulasi') {
+            // ══ MODE SCREENING: Berpotensi Akumulasi ══
+            // Cari saham yang, dibanding hari transaksi sebelumnya: Close turun TAPI Value NR naik.
+            // Dihitung untuk tanggal terbaru yang ada di database (atau finish_date kalau diisi).
+            $currentDate = !empty($finishDate)
+                ? $finishDate
+                : RingkasanSaham::max('date');
+
+            $prevDatesSub = RingkasanSaham::query()
+                ->selectRaw('stock_code, MAX(date) as prev_date')
+                ->where('date', '<', $currentDate)
+                ->groupBy('stock_code');
+
+            $query = RingkasanSaham::query()
+                ->from('ringkasan_saham as curr')
+                ->joinSub($prevDatesSub, 'lp', function ($join) {
+                    $join->on('lp.stock_code', '=', 'curr.stock_code');
+                })
+                ->join('ringkasan_saham as prev', function ($join) {
+                    $join->on('prev.stock_code', '=', 'curr.stock_code')
+                         ->on('prev.date', '=', 'lp.prev_date');
+                })
+                ->where('curr.date', $currentDate)
+                // Threshold: Close turun min 1%, Value NR naik min 50%
+                // (bukan cuma turun/naik dikit yang gampang keitung noise/data harian normal)
+                ->whereRaw('curr.close < prev.close * 0.99')
+                ->whereRaw('curr.value > prev.value * 1.5')
+                ->select(
+                    'curr.*',
+                    DB::raw('(prev.close - curr.close) as close_drop'),
+                    DB::raw('(curr.value - prev.value) as value_gain')
+                );
+
+            if (!empty($stockCode)) {
+                $query->where('curr.stock_code', $stockCode);
+            }
+
+            $query->orderByDesc('value_gain');
+
+            $perPage = 25;
+            $rows = $query->paginate($perPage)->withQueryString();
+
+            $stockCodes     = $rows->pluck('stock_code')->all();
+            $livePriceCache = $this->yahoo->getLivePrices($stockCodes, 1);
+
+            return view($viewName, [
+                'rows'            => $rows,
+                'livePriceCache'  => $livePriceCache,
+                'stockCode'       => $stockCode,
+                'startDate'       => $startDate,
+                'finishDate'      => $finishDate,
+                'filterPrevious'  => '',
+                'filterFrequency' => '',
+                'filterValue'     => '',
+                'opPrevious'      => $opPrevious,
+                'opFrequency'     => $opFrequency,
+                'opValue'         => $opValue,
+                'isSearching'     => $isSearching,
+                'savedFilters'    => SavedFilter::orderBy('name')->get(),
+                'screening'       => $screening,
+                'screeningDate'   => $currentDate,
+            ]);
+        }
 
         // Inisialisasi query (pertahankan logika filter kamu)
         $query = RingkasanSaham::query();
@@ -72,7 +155,7 @@ class StockFilterController extends Controller
         $stockCodes     = $rows->pluck('stock_code')->all();
         $livePriceCache = $this->yahoo->getLivePrices($stockCodes, 1);
 
-        return view('screens.index', [
+        return view($viewName, [
             'rows'            => $rows,
             'livePriceCache'  => $livePriceCache,
             'stockCode'       => $stockCode,
@@ -86,6 +169,8 @@ class StockFilterController extends Controller
             'opValue'         => $opValue,
             'isSearching'     => $isSearching,
             'savedFilters'    => SavedFilter::orderBy('name')->get(),
+            'screening'       => '',
+            'screeningDate'   => null,
         ]);
     }
 
@@ -115,13 +200,13 @@ class StockFilterController extends Controller
             'value'        => $this->cleanNumber($validated['value'] ?? '') ?: null,
         ]);
 
-        return redirect()->route('index')->with('success', 'Preset filter tersimpan.');
+        return redirect()->back()->with('success', 'Preset filter tersimpan.');
     }
 
     public function destroyPreset(SavedFilter $savedFilter)
     {
         $savedFilter->delete();
-        return redirect()->route('index')->with('success', 'Preset filter dihapus.');
+        return redirect()->back()->with('success', 'Preset filter dihapus.');
     }
 
     /**

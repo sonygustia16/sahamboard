@@ -29,6 +29,7 @@ Route::middleware(EnsureAuthenticated::class)->group(function () {
     // supaya tidak gampang disalahgunakan untuk hammer request ke server eksternal.
     Route::middleware('throttle:60,1')->group(function () {
         Route::get('/', [StockFilterController::class, 'index'])->name('index');
+        Route::get('/screening', [StockFilterController::class, 'screening'])->name('screening.index');
         Route::get('/chart-data/{stockCode}', [StockFilterController::class, 'chartData'])->name('chart-data');
         Route::get('/analysis', [StockAnalysisController::class, 'index'])->name('analysis.index');
         Route::get('/watchlist', [WatchlistController::class, 'index'])->name('watchlist.index');
