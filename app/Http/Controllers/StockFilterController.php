@@ -128,6 +128,7 @@ class StockFilterController extends Controller
      * Endpoint JSON ringan untuk chart klik-langsung di tabel filter.
      * Dipanggil via fetch() dari JS, bukan reload halaman.
      * Data selalu dari tabel ringkasan_saham (database), bukan hardcode.
+     * Sekarang kirim 2 seri: value (Value NR) dan close (Close Price).
      */
     public function chartData(Request $request, string $stockCode)
     {
@@ -141,13 +142,14 @@ class StockFilterController extends Controller
             ->where('stock_code', $stockCode)
             ->where('date', '>=', now()->subDays($days)->toDateString())
             ->orderBy('date', 'asc')
-            ->get(['date', 'value']);
+            ->get(['date', 'value', 'close']);
 
         return response()->json([
             'stock_code' => $stockCode,
             'timeframe'  => $timeframe,
             'labels'     => $rows->map(fn ($r) => \Illuminate\Support\Carbon::parse($r->date)->format('d M y'))->all(),
             'values'     => $rows->map(fn ($r) => (float) $r->value)->all(),
+            'closes'     => $rows->map(fn ($r) => (float) $r->close)->all(),
         ]);
     }
 

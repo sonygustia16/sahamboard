@@ -328,7 +328,7 @@
                     return;
                 }
 
-                renderClickChart(data.labels, data.values);
+                renderClickChart(data.labels, data.values, data.closes);
             })
             .catch(() => {
                 loadingEl.style.display = 'none';
@@ -348,7 +348,7 @@
         return new Intl.NumberFormat('id-ID').format(num);
     }
 
-    function renderClickChart(labels, values) {
+    function renderClickChart(labels, values, closes) {
         const ctx = document.getElementById('clickChart').getContext('2d');
 
         if (clickChartInstance) {
@@ -356,8 +356,8 @@
         }
 
         const gradient = ctx.createLinearGradient(0, 0, 0, 260);
-        gradient.addColorStop(0, 'rgba(34, 211, 238, 0.35)');
-        gradient.addColorStop(0.6, 'rgba(34, 211, 238, 0.08)');
+        gradient.addColorStop(0, 'rgba(34, 211, 238, 0.30)');
+        gradient.addColorStop(0.6, 'rgba(34, 211, 238, 0.06)');
         gradient.addColorStop(1, 'rgba(34, 211, 238, 0.00)');
 
         Chart.defaults.color = '#94a3b8';
@@ -367,20 +367,38 @@
             type: 'line',
             data: {
                 labels: labels,
-                datasets: [{
-                    label: 'Value',
-                    data: values,
-                    borderColor: '#22d3ee',
-                    borderWidth: 2.5,
-                    pointRadius: 0,
-                    pointHoverRadius: 6,
-                    pointHoverBackgroundColor: '#22d3ee',
-                    pointHoverBorderColor: '#fff',
-                    pointHoverBorderWidth: 2,
-                    fill: true,
-                    backgroundColor: gradient,
-                    tension: 0.4
-                }]
+                datasets: [
+                    {
+                        label: 'Value NR',
+                        data: values,
+                        borderColor: '#22d3ee',
+                        borderWidth: 2.5,
+                        pointRadius: 0,
+                        pointHoverRadius: 6,
+                        pointHoverBackgroundColor: '#22d3ee',
+                        pointHoverBorderColor: '#fff',
+                        pointHoverBorderWidth: 2,
+                        fill: true,
+                        backgroundColor: gradient,
+                        tension: 0.4,
+                        yAxisID: 'yValue'
+                    },
+                    {
+                        label: 'Close Price',
+                        data: closes,
+                        borderColor: '#a78bfa',
+                        borderWidth: 2,
+                        borderDash: [4, 3],
+                        pointRadius: 0,
+                        pointHoverRadius: 5,
+                        pointHoverBackgroundColor: '#a78bfa',
+                        pointHoverBorderColor: '#fff',
+                        pointHoverBorderWidth: 2,
+                        fill: false,
+                        tension: 0.4,
+                        yAxisID: 'yClose'
+                    }
+                ]
             },
             options: {
                 responsive: true,
@@ -388,17 +406,34 @@
                 interaction: { mode: 'index', intersect: false },
                 scales: {
                     x: { grid: { display: false }, ticks: { color: '#64748b', maxRotation: 0 } },
-                    y: {
+                    yValue: {
+                        position: 'left',
                         beginAtZero: false,
                         grid: { color: 'rgba(148,163,184,0.08)' },
                         ticks: {
-                            color: '#64748b',
+                            color: '#22d3ee',
                             callback: function(value) { return formatSingkat(value); }
-                        }
+                        },
+                        title: { display: true, text: 'Value NR', color: '#22d3ee', font: { size: 10 } }
+                    },
+                    yClose: {
+                        position: 'right',
+                        beginAtZero: false,
+                        grid: { drawOnChartArea: false },
+                        ticks: {
+                            color: '#a78bfa',
+                            callback: function(value) { return new Intl.NumberFormat('id-ID').format(value); }
+                        },
+                        title: { display: true, text: 'Close Price', color: '#a78bfa', font: { size: 10 } }
                     }
                 },
                 plugins: {
-                    legend: { display: false },
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        align: 'end',
+                        labels: { color: '#94a3b8', boxWidth: 12, font: { size: 11 } }
+                    },
                     tooltip: {
                         backgroundColor: '#1e293b',
                         borderColor: 'rgba(34,211,238,0.3)',
@@ -408,7 +443,10 @@
                         padding: 10,
                         callbacks: {
                             label: function(context) {
-                                return 'Value: Rp ' + formatSingkat(context.raw);
+                                if (context.dataset.yAxisID === 'yClose') {
+                                    return 'Close: Rp ' + new Intl.NumberFormat('id-ID').format(context.raw);
+                                }
+                                return 'Value NR: Rp ' + formatSingkat(context.raw);
                             }
                         }
                     }
@@ -430,6 +468,12 @@
 </script>
 <style>
     .tf-btn.active { background: var(--cyan); color: #0a0e1a; border-color: var(--cyan); }
-    tr.active-row td { background: rgba(34,211,238,0.08) !important; box-shadow: inset 3px 0 0 var(--cyan); }
+    tr.active-row td {
+        background: rgba(34,211,238,0.10) !important;
+        border-top: 1px solid rgba(34,211,238,0.35) !important;
+        border-bottom: 1px solid rgba(34,211,238,0.35) !important;
+    }
+    tr.active-row td:first-child { border-left: 1px solid rgba(34,211,238,0.35) !important; border-radius: 8px 0 0 8px; }
+    tr.active-row td:last-child { border-right: 1px solid rgba(34,211,238,0.35) !important; border-radius: 0 8px 8px 0; }
 </style>
 @endpush
