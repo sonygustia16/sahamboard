@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\RingkasanSaham;
 use App\Models\SavedFilter;
+use App\Models\Watchlist;
 use App\Services\YahooFinanceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -116,6 +117,7 @@ class StockFilterController extends Controller
                 'savedFilters'    => SavedFilter::orderBy('name')->get(),
                 'screening'       => $screening,
                 'screeningDate'   => $currentDate,
+                'watchlistedCodes' => Watchlist::pluck('stock_code')->map(fn ($c) => strtoupper($c))->all(),
             ]);
         }
 
@@ -171,6 +173,7 @@ class StockFilterController extends Controller
             'savedFilters'    => SavedFilter::orderBy('name')->get(),
             'screening'       => '',
             'screeningDate'   => null,
+            'watchlistedCodes' => Watchlist::pluck('stock_code')->map(fn ($c) => strtoupper($c))->all(),
         ]);
     }
 

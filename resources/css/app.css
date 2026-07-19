@@ -209,7 +209,7 @@ body { background-color: var(--bg); color: var(--ink); font-family: var(--body);
 .kpi-card .kpi-value.red { color: var(--loss); }
 
 /* ---------- Chart / Placeholder ---------- */
-.chart-container { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.25); padding: 1.4rem 1.5rem; height: 320px; position: relative; margin-bottom: 1.5rem; }
+.chart-container { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.25); padding: 1.4rem 1.5rem; min-height: 320px; height: auto; position: relative; margin-bottom: 1.5rem; }
 .placeholder-box { border: 1.5px dashed var(--border); border-radius: 12px; padding: 3rem 1.2rem; text-align: center; color: #475569; font-size: 0.875rem; background: var(--panel-2); }
 
 /* ---------- Sidebar Collapse ---------- */

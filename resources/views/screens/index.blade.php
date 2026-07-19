@@ -135,6 +135,7 @@
         <table>
             <thead>
                 <tr>
+                    <th style="width:36px;"></th>
                     <th style="width:50px;">No</th>
                     <th>Date</th>
                     <th>Stock Code</th>
@@ -171,8 +172,18 @@
                         }
                         // Nomor urut tetap benar saat pindah halaman
                         $no = ($rows->currentPage() - 1) * $rows->perPage() + $loop->iteration;
+                        $isWatchlisted = in_array($code, $watchlistedCodes ?? [], true);
                     @endphp
                     <tr class="clickable-row" data-code="{{ $code }}" onclick="selectStock('{{ $code }}')" style="cursor:pointer;">
+                        <td class="text-center" onclick="event.stopPropagation();">
+                            <button type="button"
+                                    class="star-btn {{ $isWatchlisted ? 'star-active' : '' }}"
+                                    id="star-{{ $code }}"
+                                    onclick="toggleWatchlistStar('{{ $code }}', {{ $livePrice ?? 'null' }})"
+                                    title="{{ $isWatchlisted ? 'Hapus dari Watchlist' : 'Tambah ke Watchlist' }}">
+                                {{ $isWatchlisted ? '★' : '☆' }}
+                            </button>
+                        </td>
                         <td class="text-center"><strong>{{ $no }}</strong></td>
                         <td>{{ \Illuminate\Support\Carbon::parse($row->date)->format('d M y') }}</td>
                         <td><span class="code-pill">{{ $code }}</span></td>
@@ -183,7 +194,7 @@
                         <td class="text-right">{{ number_format($row->value, 0, ',', '.') }}</td>
                     </tr>
                 @empty
-                    <tr class="empty-row"><td colspan="8">Data tidak ditemukan</td></tr>
+                    <tr class="empty-row"><td colspan="9">Data tidak ditemukan</td></tr>
                 @endforelse
             </tbody>
         </table>
@@ -295,6 +306,37 @@
     let clickChartInstance = null;
     let activeStockCode = null;
     let activeTimeframe = '1m';
+
+    // ══ Toggle cepat ke Watchlist lewat ikon bintang ══
+    function toggleWatchlistStar(code, livePrice) {
+        fetch('{{ route("watchlist.quick-toggle") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify({ stock_code: code, live_price: livePrice })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (!data.success) return;
+
+            const btn = document.getElementById('star-' + code);
+            if (!btn) return;
+
+            if (data.added) {
+                btn.classList.add('star-active');
+                btn.textContent = '★';
+                btn.title = 'Hapus dari Watchlist';
+            } else {
+                btn.classList.remove('star-active');
+                btn.textContent = '☆';
+                btn.title = 'Tambah ke Watchlist';
+            }
+        })
+        .catch(() => alert('Gagal update watchlist. Coba lagi.'));
+    }
 
     function selectStock(code) {
         activeStockCode = code;
@@ -456,7 +498,21 @@
                         borderWidth: 1,
                         titleColor: '#fff',
                         bodyColor: '#e2e8f0',
-                        footerColor: '#fbbf24',
+                        footerColor: function(items) {
+                            if (!items || !items.length) return '#94a3b8';
+                            const idx = items[0].dataIndex;
+                            if (idx === 0) return '#94a3b8';
+
+                            const valPct = pctChange(currentChartValues[idx - 1], currentChartValues[idx]);
+                            const closePct = pctChange(currentChartCloses[idx - 1], currentChartCloses[idx]);
+
+                            if (closePct <= -SIGNAL_CLOSE_PCT_THRESHOLD && valPct >= SIGNAL_VALUE_PCT_THRESHOLD) {
+                                return '#10b981';
+                            } else if (closePct >= SIGNAL_CLOSE_PCT_THRESHOLD && valPct <= -SIGNAL_VALUE_PCT_THRESHOLD) {
+                                return '#f59e0b';
+                            }
+                            return '#94a3b8';
+                        },
                         footerFont: { weight: '600', size: 11 },
                         padding: 10,
                         callbacks: {
@@ -500,6 +556,12 @@
 </script>
 <style>
     .tf-btn.active { background: var(--cyan); color: #0a0e1a; border-color: var(--cyan); }
+    .star-btn {
+        background: none; border: none; cursor: pointer; font-size: 1.2rem; line-height: 1;
+        color: var(--muted); padding: 0.15rem; transition: transform 0.15s, color 0.15s;
+    }
+    .star-btn:hover { transform: scale(1.2); color: #fbbf24; }
+    .star-btn.star-active { color: #fbbf24; }
     tr.active-row td {
         background: rgba(34,211,238,0.10) !important;
         border-top: 1px solid rgba(34,211,238,0.35) !important;
