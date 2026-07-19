@@ -150,6 +150,10 @@ body { background-color: var(--bg); color: var(--ink); font-family: var(--body);
 .form-group input::placeholder { color: #475569; }
 .form-group input:focus, .form-group select:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(34,211,238,0.15); }
 
+/* Ikon kalender bawaan browser default gelap & tidak kelihatan di tema dark — dibalik jadi terang */
+input[type="date"] { color-scheme: dark; }
+input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1) brightness(1.5); cursor: pointer; }
+
 .input-group { display: flex; gap: 0.4rem; }
 .input-group select { width: 58px; padding: 0.6rem 0.3rem; text-align: center; }
 .input-group input { width: 140px; }

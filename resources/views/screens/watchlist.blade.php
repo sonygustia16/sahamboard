@@ -6,31 +6,6 @@
 
 @section('content')
 
-    <div class="glass-card">
-        <h3><span class="accent-bar"></span>Tambah ke Watchlist (manual)</h3>
-        <form action="{{ route('watchlist.store') }}" method="POST">
-            @csrf
-            <div class="filter-grid">
-                <div class="form-group">
-                    <label>Stock Code</label>
-                    <input type="text" name="stock_code" placeholder="Contoh: BBCA" style="width:130px;" required>
-                </div>
-                <div class="form-group">
-                    <label>Target Price</label>
-                    <input type="number" step="0.01" name="target_price" placeholder="0" style="width:130px;" required>
-                </div>
-                <div class="form-group">
-                    <label>Catatan</label>
-                    <input type="text" name="note" placeholder="Breakout resistance..." style="width:240px;">
-                </div>
-            </div>
-            <div class="action-row">
-                <button type="submit" class="btn btn-primary">Tambah</button>
-                <a href="{{ route('watchlist.index') }}" class="btn btn-ghost">Reset</a>
-            </div>
-        </form>
-    </div>
-
     <div class="table-wrap">
         <table>
             <thead>
@@ -93,6 +68,8 @@
                         data-entry-lot="{{ $row->entry_lot }}"
                         data-target-price="{{ $row->target_price }}"
                         data-note="{{ $row->note }}"
+                        data-fee-beli="{{ $row->fee_beli_pct }}"
+                        data-fee-jual="{{ $row->fee_jual_pct }}"
                         data-live="{{ $formattedLive }}"
                     >
                         <td class="text-center"><strong>{{ $loop->iteration }}</strong></td>
@@ -130,7 +107,7 @@
                 <div class="avg-grid">
                     <div class="avg-field">
                         <label>Entry (Close)</label>
-                        <input type="text" id="detailEntry" readonly class="avg-readonly">
+                        <input type="text" id="detailEntry" readonly class="avg-readonly avg-highlight-cyan">
                     </div>
                     <div class="avg-field">
                         <label>Entry Lot</label>
@@ -139,6 +116,14 @@
                     <div class="avg-field">
                         <label>Target Price</label>
                         <input type="number" step="0.01" min="0" id="detailTargetPrice" class="avg-input">
+                    </div>
+                    <div class="avg-field">
+                        <label>Fee Beli (%)</label>
+                        <input type="number" step="0.001" min="0" max="10" id="detailFeeBeli" class="avg-input" placeholder="0.15">
+                    </div>
+                    <div class="avg-field">
+                        <label>Fee Jual (%)</label>
+                        <input type="number" step="0.001" min="0" max="10" id="detailFeeJual" class="avg-input" placeholder="0.25">
                     </div>
                     <div class="avg-field">
                         <label>Entry Avg 1 (-5%)</label>
@@ -166,11 +151,15 @@
                     </div>
                     <div class="avg-field">
                         <label>Avg Price</label>
-                        <input type="text" class="avg-readonly" id="detailAvgPrice" readonly>
+                        <input type="text" class="avg-readonly avg-highlight-cyan" id="detailAvgPrice" readonly>
+                    </div>
+                    <div class="avg-field">
+                        <label>CL (Cut Loss)</label>
+                        <input type="text" class="avg-readonly" id="detailCl" readonly style="color:var(--loss);">
                     </div>
                     <div class="avg-field">
                         <label>Total Lot</label>
-                        <input type="text" class="avg-readonly" id="detailTotalLot" readonly>
+                        <input type="text" class="avg-readonly avg-highlight-yellow" id="detailTotalLot" readonly>
                     </div>
                     <div class="avg-field">
                         <label>Modal</label>
@@ -179,10 +168,6 @@
                     <div class="avg-field">
                         <label>Rugi (-4%)</label>
                         <input type="text" class="avg-readonly" id="detailRugi" readonly style="color:var(--loss);">
-                    </div>
-                    <div class="avg-field">
-                        <label>CL (Cut Loss)</label>
-                        <input type="text" class="avg-readonly" id="detailCl" readonly style="color:var(--loss);">
                     </div>
                 </div>
 
@@ -257,6 +242,8 @@
         color: var(--ink); padding:0.5rem 0.6rem; font-family: var(--mono); font-size:0.85rem;
     }
     .avg-readonly { color: var(--muted) !important; background: var(--panel-2) !important; cursor:default; }
+    .avg-highlight-cyan { color: var(--cyan) !important; font-weight: 700 !important; border-color: rgba(34,211,238,0.4) !important; }
+    .avg-highlight-yellow { color: #fbbf24 !important; font-weight: 700 !important; border-color: rgba(245,158,11,0.4) !important; }
     .avg-input:focus { outline:none; border-color: var(--cyan); }
     .watchlist-row { cursor: pointer; }
 </style>
@@ -268,6 +255,9 @@
     let currentDetailId = null;
 
     function calcAndRenderDetail(entry, entryLot) {
+        const feeBeli = parseFloat(document.getElementById('detailFeeBeli').value) || 0;
+        const feeJual = parseFloat(document.getElementById('detailFeeJual').value) || 0;
+
         const entryAvg1 = entry * 0.95;
         const entryAvg2 = entry * 0.90;
         const entryAvg3 = entry * 0.85;
@@ -283,8 +273,10 @@
             avgPrice = (entry * entryLot + entryAvg1 * lotAvg1 + entryAvg2 * lotAvg2 + entryAvg3 * lotAvg3) / totalLot;
         }
 
-        const modal = avgPrice * totalLot * 100;
-        const rugi = modal * -CL_PCT;
+        const modalDasar = avgPrice * totalLot * 100;
+        const modal = modalDasar * (1 + feeBeli / 100); // Modal + fee beli
+        const rugiKotor = modalDasar * -CL_PCT;
+        const rugi = rugiKotor - (modalDasar * (feeJual / 100)); // Rugi diperberat fee jual
         const cl = avgPrice * (1 - CL_PCT);
 
         document.getElementById('detailEntryAvg1').value = entryLot > 0 ? fmt(entryAvg1) : '-';
@@ -315,13 +307,18 @@
         document.getElementById('detailEntry').value = fmt(entry);
         document.getElementById('detailEntryLot').value = row.dataset.entryLot || '';
         document.getElementById('detailTargetPrice').value = row.dataset.targetPrice || '';
+        document.getElementById('detailFeeBeli').value = row.dataset.feeBeli || '';
+        document.getElementById('detailFeeJual').value = row.dataset.feeJual || '';
         document.getElementById('detailNote').value = row.dataset.note || '';
 
         calcAndRenderDetail(entry, entryLot);
 
-        document.getElementById('detailEntryLot').oninput = function() {
-            calcAndRenderDetail(entry, parseInt(this.value) || 0);
-        };
+        function recalc() {
+            calcAndRenderDetail(entry, parseInt(document.getElementById('detailEntryLot').value) || 0);
+        }
+        document.getElementById('detailEntryLot').oninput = recalc;
+        document.getElementById('detailFeeBeli').oninput = recalc;
+        document.getElementById('detailFeeJual').oninput = recalc;
 
         document.getElementById('detailModalOverlay').style.display = 'flex';
     }
@@ -340,6 +337,8 @@
         const payload = {
             entry_lot: document.getElementById('detailEntryLot').value || null,
             target_price: document.getElementById('detailTargetPrice').value || 0,
+            fee_beli_pct: document.getElementById('detailFeeBeli').value || null,
+            fee_jual_pct: document.getElementById('detailFeeJual').value || null,
             note: document.getElementById('detailNote').value,
         };
 

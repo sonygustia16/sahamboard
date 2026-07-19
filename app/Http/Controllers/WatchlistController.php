@@ -92,6 +92,8 @@ class WatchlistController extends Controller
             'entry_lot'    => 'nullable|integer|min:0',
             'target_price' => 'nullable|numeric|min:0',
             'note'         => 'nullable|string|max:255',
+            'fee_beli_pct' => 'nullable|numeric|min:0|max:10',
+            'fee_jual_pct' => 'nullable|numeric|min:0|max:10',
         ]);
 
         $watchlist->update($validated);

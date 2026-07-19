@@ -13,5 +13,7 @@ class Watchlist extends Model
         'note',
         'entry',
         'entry_lot',
+        'fee_beli_pct',
+        'fee_jual_pct',
     ];
 }

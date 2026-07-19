@@ -23,17 +23,6 @@
         <span id="watchlistAlertBadge" style="display:none; position:absolute; right:0.6rem; top:50%; transform:translateY(-50%); background:var(--loss); color:#fff; font-family:var(--mono); font-size:0.65rem; font-weight:700; border-radius:10px; padding:0.05rem 0.45rem;"></span>
     </a>
 
-    <div class="nav-section-label">Trading Plan</div>
-    <a href="{{ route('entry.index') }}" class="nav-link {{ request()->routeIs('entry.*') ? 'active' : '' }}">
-        Entry Plan
-    </a>
-    <a href="{{ route('lotsizing.index') }}" class="nav-link {{ request()->routeIs('lotsizing.*') ? 'active' : '' }}">
-        Lot Sizing
-    </a>
-    <a href="{{ route('money-management.index') }}" class="nav-link {{ request()->routeIs('money-management.*') ? 'active' : '' }}">
-        Money Management
-    </a>
-
     <div class="sidebar-footer">
         v1.0 (Laravel) · Data: Yahoo Finance Proxy
         <form method="POST" action="{{ route('logout') }}" style="margin-top: 0.6rem;">
