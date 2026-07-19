@@ -176,16 +176,17 @@
 
                         if ($livePrice !== null && $row->previous > 0) {
                             $diff = $livePrice - $row->previous;
+                            $pct = ($diff / $row->previous) * 100;
                             $formattedLive = number_format($livePrice, 0, ',', '.');
 
                             if ($diff > 0) {
-                                $changeText = '+' . number_format($diff, 0, ',', '.');
+                                $changeText = '+' . number_format($diff, 0, ',', '.') . ' / +' . number_format($pct, 2) . '%';
                                 $changeClass = 'text-green';
                             } elseif ($diff < 0) {
-                                $changeText = number_format($diff, 0, ',', '.');
+                                $changeText = number_format($diff, 0, ',', '.') . ' / ' . number_format($pct, 2) . '%';
                                 $changeClass = 'text-red';
                             } else {
-                                $changeText = '0';
+                                $changeText = '0 / 0%';
                                 $changeClass = 'text-gray';
                             }
                         }
@@ -198,7 +199,7 @@
                             <button type="button"
                                     class="star-btn {{ $isWatchlisted ? 'star-active' : '' }}"
                                     id="star-{{ $code }}"
-                                    onclick="toggleWatchlistStar('{{ $code }}', {{ $livePrice ?? 'null' }})"
+                                    onclick="toggleWatchlistStar('{{ $code }}', {{ $livePrice ?? 'null' }}, '{{ $row->date }}')"
                                     title="{{ $isWatchlisted ? 'Hapus dari Watchlist' : 'Tambah ke Watchlist' }}">
                                 {{ $isWatchlisted ? '★' : '☆' }}
                             </button>
@@ -327,7 +328,7 @@
     let activeTimeframe = '1m';
 
     // ══ Toggle cepat ke Watchlist lewat ikon bintang ══
-    function toggleWatchlistStar(code, livePrice) {
+    function toggleWatchlistStar(code, livePrice, dateStr) {
         fetch('{{ route("watchlist.quick-toggle") }}', {
             method: 'POST',
             headers: {
@@ -335,7 +336,7 @@
                 'Accept': 'application/json',
                 'X-CSRF-TOKEN': '{{ csrf_token() }}'
             },
-            body: JSON.stringify({ stock_code: code, live_price: livePrice })
+            body: JSON.stringify({ stock_code: code, live_price: livePrice, date: dateStr })
         })
         .then(res => res.json())
         .then(data => {

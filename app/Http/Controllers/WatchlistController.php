@@ -37,6 +37,7 @@ class WatchlistController extends Controller
         ]);
 
         $validated['stock_code'] = strtoupper($validated['stock_code']);
+        $validated['date'] = now()->toDateString();
 
         Watchlist::create($validated);
 
@@ -51,7 +52,8 @@ class WatchlistController extends Controller
 
     /**
      * Toggle cepat lewat ikon bintang di tabel Filter Lengkap/Screening.
-     * Kalau saham belum ada di watchlist -> ditambahkan (target_price default = harga live saat itu, bisa diedit lagi di halaman Watchlist).
+     * Kalau saham belum ada di watchlist -> ditambahkan (target_price & entry default = harga live saat itu,
+     * date = tanggal baris tabel yang di-klik, biar tau data ini diambil dari tanggal berapa).
      * Kalau sudah ada -> dihapus. Dipanggil via fetch() AJAX, tidak reload halaman.
      */
     public function quickToggle(Request $request)
@@ -59,6 +61,7 @@ class WatchlistController extends Controller
         $validated = $request->validate([
             'stock_code' => 'required|string|max:10',
             'live_price' => 'nullable|numeric|min:0',
+            'date'       => 'nullable|date',
         ]);
 
         $stockCode = strtoupper($validated['stock_code']);
@@ -71,10 +74,29 @@ class WatchlistController extends Controller
 
         Watchlist::create([
             'stock_code'   => $stockCode,
+            'date'         => $validated['date'] ?? now()->toDateString(),
             'target_price' => $validated['live_price'] ?? 0,
+            'entry'        => $validated['live_price'] ?? 0,
         ]);
 
         return response()->json(['success' => true, 'added' => true]);
+    }
+
+    /**
+     * Simpan perubahan dari modal detail Watchlist (Entry Lot, Target Price, Catatan).
+     * Dipanggil via fetch() AJAX saat user klik "Simpan" di modal.
+     */
+    public function updateDetail(Request $request, Watchlist $watchlist)
+    {
+        $validated = $request->validate([
+            'entry_lot'    => 'nullable|integer|min:0',
+            'target_price' => 'nullable|numeric|min:0',
+            'note'         => 'nullable|string|max:255',
+        ]);
+
+        $watchlist->update($validated);
+
+        return response()->json(['success' => true]);
     }
 
     /**

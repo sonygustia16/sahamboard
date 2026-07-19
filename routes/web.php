@@ -50,6 +50,7 @@ Route::middleware(EnsureAuthenticated::class)->group(function () {
     Route::delete('/money-management/holding/{holding}', [MoneyManagementController::class, 'destroyHolding'])->name('money-management.holding.destroy');
 
     Route::get('/watchlist/alerts-check', [WatchlistController::class, 'alertsCheck'])->name('watchlist.alerts-check');
+    Route::patch('/watchlist/{watchlist}/detail', [WatchlistController::class, 'updateDetail'])->name('watchlist.update-detail');
     Route::post('/watchlist/quick-toggle', [WatchlistController::class, 'quickToggle'])->name('watchlist.quick-toggle');
     Route::post('/watchlist', [WatchlistController::class, 'store'])->name('watchlist.store');
     Route::delete('/watchlist/{watchlist}', [WatchlistController::class, 'destroy'])->name('watchlist.destroy');
