@@ -117,6 +117,56 @@
                         <label>Target Price</label>
                         <input type="number" step="0.01" min="0" id="detailTargetPrice" class="avg-input">
                     </div>
+
+                    <div class="avg-field">
+                        <label class="lbl-red">Entry Avg 1 (-5%)</label>
+                        <input type="text" class="avg-readonly" id="detailEntryAvg1" readonly>
+                    </div>
+                    <div class="avg-field">
+                        <label class="lbl-red">Entry Avg 2 (-10%)</label>
+                        <input type="text" class="avg-readonly" id="detailEntryAvg2" readonly>
+                    </div>
+                    <div class="avg-field">
+                        <label class="lbl-red">Entry Avg 3 (-15%)</label>
+                        <input type="text" class="avg-readonly" id="detailEntryAvg3" readonly>
+                    </div>
+
+                    <div class="avg-field">
+                        <label class="lbl-blue">Lot Avg 1 (-5%)</label>
+                        <input type="text" class="avg-readonly" id="detailLotAvg1" readonly>
+                    </div>
+                    <div class="avg-field">
+                        <label class="lbl-blue">Lot Avg 2 (-10%)</label>
+                        <input type="text" class="avg-readonly" id="detailLotAvg2" readonly>
+                    </div>
+                    <div class="avg-field">
+                        <label class="lbl-blue">Lot Avg 3 (-15%)</label>
+                        <input type="text" class="avg-readonly" id="detailLotAvg3" readonly>
+                    </div>
+
+                    <div class="avg-field">
+                        <label class="lbl-orange">Avg Price</label>
+                        <input type="text" class="avg-readonly avg-highlight-cyan" id="detailAvgPrice" readonly>
+                    </div>
+                    <div class="avg-field">
+                        <label class="lbl-orange">CL (Cut Loss)</label>
+                        <input type="text" class="avg-readonly" id="detailCl" readonly style="color:var(--loss);">
+                    </div>
+                    <div class="avg-field">
+                        <label class="lbl-orange">Total Lot</label>
+                        <input type="text" class="avg-readonly avg-highlight-yellow" id="detailTotalLot" readonly>
+                    </div>
+
+                    <div class="avg-field">
+                        <label class="lbl-green">Modal</label>
+                        <input type="text" class="avg-readonly" id="detailModal" readonly>
+                    </div>
+                    <div class="avg-field">
+                        <label class="lbl-red">Rugi (-4%)</label>
+                        <input type="text" class="avg-readonly" id="detailRugi" readonly style="color:var(--loss);">
+                    </div>
+                    <div class="avg-field"></div>
+
                     <div class="avg-field">
                         <label>Fee Beli (%)</label>
                         <input type="number" step="0.001" min="0" max="10" id="detailFeeBeli" class="avg-input" placeholder="0.15">
@@ -125,50 +175,17 @@
                         <label>Fee Jual (%)</label>
                         <input type="number" step="0.001" min="0" max="10" id="detailFeeJual" class="avg-input" placeholder="0.25">
                     </div>
+                    <div class="avg-field"></div>
+
                     <div class="avg-field">
-                        <label>Entry Avg 1 (-5%)</label>
-                        <input type="text" class="avg-readonly" id="detailEntryAvg1" readonly>
+                        <label>Fee Selisih Beli</label>
+                        <input type="text" class="avg-readonly" id="detailFeeSelisihBeli" readonly>
                     </div>
                     <div class="avg-field">
-                        <label>Entry Avg 2 (-10%)</label>
-                        <input type="text" class="avg-readonly" id="detailEntryAvg2" readonly>
+                        <label>Fee Selisih Jual</label>
+                        <input type="text" class="avg-readonly" id="detailFeeSelisihJual" readonly>
                     </div>
-                    <div class="avg-field">
-                        <label>Entry Avg 3 (-15%)</label>
-                        <input type="text" class="avg-readonly" id="detailEntryAvg3" readonly>
-                    </div>
-                    <div class="avg-field">
-                        <label>Lot Avg 1 (-5%)</label>
-                        <input type="text" class="avg-readonly" id="detailLotAvg1" readonly>
-                    </div>
-                    <div class="avg-field">
-                        <label>Lot Avg 2 (-10%)</label>
-                        <input type="text" class="avg-readonly" id="detailLotAvg2" readonly>
-                    </div>
-                    <div class="avg-field">
-                        <label>Lot Avg 3 (-15%)</label>
-                        <input type="text" class="avg-readonly" id="detailLotAvg3" readonly>
-                    </div>
-                    <div class="avg-field">
-                        <label>Avg Price</label>
-                        <input type="text" class="avg-readonly avg-highlight-cyan" id="detailAvgPrice" readonly>
-                    </div>
-                    <div class="avg-field">
-                        <label>CL (Cut Loss)</label>
-                        <input type="text" class="avg-readonly" id="detailCl" readonly style="color:var(--loss);">
-                    </div>
-                    <div class="avg-field">
-                        <label>Total Lot</label>
-                        <input type="text" class="avg-readonly avg-highlight-yellow" id="detailTotalLot" readonly>
-                    </div>
-                    <div class="avg-field">
-                        <label>Modal</label>
-                        <input type="text" class="avg-readonly" id="detailModal" readonly>
-                    </div>
-                    <div class="avg-field">
-                        <label>Rugi (-4%)</label>
-                        <input type="text" class="avg-readonly" id="detailRugi" readonly style="color:var(--loss);">
-                    </div>
+                    <div class="avg-field"></div>
                 </div>
 
                 <div class="avg-field" style="margin-top:0.8rem;">
@@ -244,6 +261,10 @@
     .avg-readonly { color: var(--muted) !important; background: var(--panel-2) !important; cursor:default; }
     .avg-highlight-cyan { color: var(--cyan) !important; font-weight: 700 !important; border-color: rgba(34,211,238,0.4) !important; }
     .avg-highlight-yellow { color: #fbbf24 !important; font-weight: 700 !important; border-color: rgba(245,158,11,0.4) !important; }
+    .avg-field label.lbl-red { color: #f43f5e !important; }
+    .avg-field label.lbl-blue { color: #38bdf8 !important; }
+    .avg-field label.lbl-orange { color: #f97316 !important; }
+    .avg-field label.lbl-green { color: #10b981 !important; }
     .avg-input:focus { outline:none; border-color: var(--cyan); }
     .watchlist-row { cursor: pointer; }
 </style>
@@ -274,9 +295,11 @@
         }
 
         const modalDasar = avgPrice * totalLot * 100;
-        const modal = modalDasar * (1 + feeBeli / 100); // Modal + fee beli
+        const feeSelisihBeli = modalDasar * (feeBeli / 100); // Nominal Rp fee beli
+        const feeSelisihJual = modalDasar * (feeJual / 100); // Nominal Rp fee jual
+        const modal = modalDasar + feeSelisihBeli; // Modal + fee beli
         const rugiKotor = modalDasar * -CL_PCT;
-        const rugi = rugiKotor - (modalDasar * (feeJual / 100)); // Rugi diperberat fee jual
+        const rugi = rugiKotor - feeSelisihJual; // Rugi diperberat fee jual
         const cl = avgPrice * (1 - CL_PCT);
 
         document.getElementById('detailEntryAvg1').value = entryLot > 0 ? fmt(entryAvg1) : '-';
@@ -290,6 +313,8 @@
         document.getElementById('detailModal').value = entryLot > 0 ? 'Rp ' + fmt(modal) : '-';
         document.getElementById('detailRugi').value = entryLot > 0 ? 'Rp ' + fmt(rugi) : '-';
         document.getElementById('detailCl').value = entryLot > 0 ? fmt(cl) : '-';
+        document.getElementById('detailFeeSelisihBeli').value = entryLot > 0 ? 'Rp ' + fmt(feeSelisihBeli) : '-';
+        document.getElementById('detailFeeSelisihJual').value = entryLot > 0 ? 'Rp ' + fmt(feeSelisihJual) : '-';
     }
 
     function openDetailModal(id) {
