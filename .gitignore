@@ -22,6 +22,8 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+env.render
+migrate_to_neon.py
 
 # Database dump/export files
 *.sql
@@ -29,3 +31,4 @@ Thumbs.db
 
 # Script batch lokal untuk tarik data manual — tidak perlu ikut repo
 scripts/*.bat
+scripts/*.py
