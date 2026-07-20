@@ -14,9 +14,9 @@
                     <th>Date</th>
                     <th>Stock Code</th>
                     <th>Live Price</th>
-                    <th>Target Price</th>
+                    <th>Entry (Close)</th>
                     <th>Change</th>
-                    <th>Jarak ke Target</th>
+                    <th>CL (Cut Loss)</th>
                     <th style="width:90px;">Aksi</th>
                 </tr>
             </thead>
@@ -31,12 +31,36 @@
 
                         if ($livePrice !== null) {
                             $formattedLive = number_format($livePrice, 0, ',', '.');
-                            $gap = $row->target_price - $livePrice;
-                            $isHit = $gap <= 0;
-                            $gapClass = $isHit ? 'text-green' : 'text-gray';
-                            $gapText = $isHit ? '🎯 Tercapai' : number_format($gap, 0, ',', '.') . ' poin';
 
                             $entryRef = $row->entry ?? null;
+                            $entryLot = (int) ($row->entry_lot ?? 0);
+
+                            // Hitung CL (Cut Loss) pakai rumus averaging yang sama kayak modal detail
+                            $clPrice = null;
+                            if ($entryRef && $entryRef > 0 && $entryLot > 0) {
+                                $entryAvg1 = $entryRef * 0.95;
+                                $entryAvg2 = $entryRef * 0.90;
+                                $entryAvg3 = $entryRef * 0.85;
+                                $lotAvg1 = $entryLot * 2;
+                                $lotAvg2 = $entryLot * 4;
+                                $lotAvg3 = $entryLot * 8;
+                                $totalLot = $entryLot + $lotAvg1 + $lotAvg2 + $lotAvg3;
+                                $avgPrice = ($entryRef * $entryLot + $entryAvg1 * $lotAvg1 + $entryAvg2 * $lotAvg2 + $entryAvg3 * $lotAvg3) / $totalLot;
+                                $clPrice = $avgPrice * (1 - 0.04);
+                            }
+
+                            if ($clPrice !== null) {
+                                $isHit = $livePrice <= $clPrice;
+                                $gapClass = $isHit ? 'text-red' : 'text-gray';
+                                $gap = $livePrice - $clPrice;
+                                $gapText = $isHit ? '⚠️ CL Tersentuh' : number_format($gap, 0, ',', '.') . ' poin di atas CL';
+                                $clFormatted = number_format($clPrice, 0, ',', '.');
+                            } else {
+                                $gapClass = 'text-gray';
+                                $gapText = 'Isi Entry Lot dulu';
+                                $clFormatted = '-';
+                            }
+
                             if ($entryRef && $entryRef > 0) {
                                 $diff = $livePrice - $entryRef;
                                 $pct = ($diff / $entryRef) * 100;
@@ -54,12 +78,13 @@
                             $formattedLive = "<span class='status-chip'>Timeout/Limit</span>";
                             $gapClass = 'text-gray';
                             $gapText = '-';
+                            $clFormatted = '-';
                         }
 
                         $entryPrice = $row->entry ?? $livePrice ?? 0;
                         $dateFormatted = $row->date ? \Illuminate\Support\Carbon::parse($row->date)->format('d M y') : '-';
                     @endphp
-                    <tr class="clickable-row watchlist-row" style="{{ $isHit ? 'box-shadow: inset 3px 0 0 var(--gain);' : '' }}"
+                    <tr class="clickable-row watchlist-row" style="{{ $isHit ? 'box-shadow: inset 3px 0 0 var(--loss);' : '' }}"
                         onclick="openDetailModal({{ $row->id }})"
                         data-id="{{ $row->id }}"
                         data-code="{{ $code }}"
@@ -76,9 +101,9 @@
                         <td>{{ $dateFormatted }}</td>
                         <td><span class="code-pill">{{ $code }}</span></td>
                         <td class="text-right live-cell">{!! $formattedLive !!}</td>
-                        <td class="text-right">{{ number_format($row->target_price, 0, ',', '.') }}</td>
+                        <td class="text-right">{{ number_format($entryPrice, 0, ',', '.') }}</td>
                         <td class="text-center {{ $changeClass }}">{{ $changeText }}</td>
-                        <td class="text-right {{ $gapClass }}">{{ $gapText }}</td>
+                        <td class="text-right {{ $gapClass }}">{{ $clFormatted }} <span style="font-size:0.72em; opacity:0.8;">({{ $gapText }})</span></td>
                         <td class="text-center" onclick="event.stopPropagation();">
                             <button type="button" class="icon-btn" title="Edit" onclick="openDetailModal({{ $row->id }})">✏️</button>
                             <button type="button" class="icon-btn" title="Hapus" onclick="openDeleteConfirm({{ $row->id }}, '{{ $code }}')">🗑️</button>
