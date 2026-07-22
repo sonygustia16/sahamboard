@@ -226,19 +226,177 @@ class StockFilterController extends Controller
         $daysMap = ['7d' => 7, '1m' => 30, '3m' => 90, '6m' => 180, '1y' => 365];
         $days = $daysMap[$timeframe] ?? 30;
 
+        // Ambil data ekstra 100 hari SEBELUM rentang tampilan, khusus buat "pemanasan"
+        // perhitungan indikator (RSI/MACD butuh histori sebelum titik pertama supaya akurat,
+        // bukan cuma buat data yang ditampilkan di chart).
+        $warmupDays = $days + 100;
+
         $rows = RingkasanSaham::query()
             ->where('stock_code', $stockCode)
-            ->where('date', '>=', now()->subDays($days)->toDateString())
+            ->where('date', '>=', now()->subDays($warmupDays)->toDateString())
             ->orderBy('date', 'asc')
             ->get(['date', 'value', 'close']);
 
+        $closesAll = $rows->map(fn ($r) => (float) $r->close)->values()->all();
+
+        $rsiAll = $this->calcRsi($closesAll, 14);
+        [$stochKAll, $stochDAll] = $this->calcStochRsi($closesAll, 14, 14, 3, 3);
+        [$macdLineAll, $macdSignalAll, $macdHistAll] = $this->calcMacd($closesAll, 12, 26, 9);
+
+        // Potong lagi cuma bagian yang mau ditampilkan (buang periode warm-up)
+        $cutoffDate = now()->subDays($days)->toDateString();
+        $displayRows = $rows->filter(fn ($r) => $r->date >= $cutoffDate)->values();
+        $startIndex = $rows->count() - $displayRows->count();
+
+        $slice = fn ($arr) => array_values(array_slice($arr, $startIndex));
+
         return response()->json([
-            'stock_code' => $stockCode,
-            'timeframe'  => $timeframe,
-            'labels'     => $rows->map(fn ($r) => \Illuminate\Support\Carbon::parse($r->date)->format('d M y'))->all(),
-            'values'     => $rows->map(fn ($r) => (float) $r->value)->all(),
-            'closes'     => $rows->map(fn ($r) => (float) $r->close)->all(),
+            'stock_code'   => $stockCode,
+            'timeframe'    => $timeframe,
+            'labels'       => $displayRows->map(fn ($r) => \Illuminate\Support\Carbon::parse($r->date)->format('d M y'))->all(),
+            'values'       => $displayRows->map(fn ($r) => (float) $r->value)->all(),
+            'closes'       => $displayRows->map(fn ($r) => (float) $r->close)->all(),
+            'rsi'          => $slice($rsiAll),
+            'stoch_k'      => $slice($stochKAll),
+            'stoch_d'      => $slice($stochDAll),
+            'macd_line'    => $slice($macdLineAll),
+            'macd_signal'  => $slice($macdSignalAll),
+            'macd_hist'    => $slice($macdHistAll),
         ]);
+    }
+
+    /**
+     * RSI (Relative Strength Index) standar Wilder, period 14 default.
+     * Return array sepanjang $closes, isinya null di titik-titik awal yang belum cukup data.
+     */
+    private function calcRsi(array $closes, int $period = 14): array
+    {
+        $n = count($closes);
+        $rsi = array_fill(0, $n, null);
+        if ($n < $period + 1) {
+            return $rsi;
+        }
+
+        $gains = 0; $losses = 0;
+        for ($i = 1; $i <= $period; $i++) {
+            $diff = $closes[$i] - $closes[$i - 1];
+            if ($diff > 0) $gains += $diff; else $losses += abs($diff);
+        }
+        $avgGain = $gains / $period;
+        $avgLoss = $losses / $period;
+        $rsi[$period] = $avgLoss == 0 ? 100 : 100 - (100 / (1 + ($avgGain / $avgLoss)));
+
+        for ($i = $period + 1; $i < $n; $i++) {
+            $diff = $closes[$i] - $closes[$i - 1];
+            $gain = $diff > 0 ? $diff : 0;
+            $loss = $diff < 0 ? abs($diff) : 0;
+            $avgGain = (($avgGain * ($period - 1)) + $gain) / $period;
+            $avgLoss = (($avgLoss * ($period - 1)) + $loss) / $period;
+            $rsi[$i] = $avgLoss == 0 ? 100 : 100 - (100 / (1 + ($avgGain / $avgLoss)));
+        }
+
+        return $rsi;
+    }
+
+    /**
+     * Stochastic RSI: terapkan rumus stochastic ke deretan nilai RSI (bukan ke harga langsung),
+     * lalu %K di-smooth (SMA) dan %D adalah SMA dari %K. Skala hasil 0-100.
+     */
+    private function calcStochRsi(array $closes, int $rsiPeriod = 14, int $stochPeriod = 14, int $smoothK = 3, int $smoothD = 3): array
+    {
+        $rsi = $this->calcRsi($closes, $rsiPeriod);
+        $n = count($rsi);
+        $rawK = array_fill(0, $n, null);
+
+        for ($i = 0; $i < $n; $i++) {
+            if ($rsi[$i] === null) continue;
+            $windowStart = max(0, $i - $stochPeriod + 1);
+            $window = array_filter(array_slice($rsi, $windowStart, $i - $windowStart + 1), fn ($v) => $v !== null);
+            if (count($window) < $stochPeriod) continue;
+
+            $minRsi = min($window);
+            $maxRsi = max($window);
+            $rawK[$i] = ($maxRsi - $minRsi) == 0 ? 0 : (($rsi[$i] - $minRsi) / ($maxRsi - $minRsi)) * 100;
+        }
+
+        $kSmoothed = $this->simpleMovingAverage($rawK, $smoothK);
+        $dSmoothed = $this->simpleMovingAverage($kSmoothed, $smoothD);
+
+        return [$kSmoothed, $dSmoothed];
+    }
+
+    /** SMA yang toleran terhadap null (hasil null kalau jendelanya belum penuh nilai valid) */
+    private function simpleMovingAverage(array $arr, int $period): array
+    {
+        $n = count($arr);
+        $out = array_fill(0, $n, null);
+        for ($i = 0; $i < $n; $i++) {
+            $windowStart = max(0, $i - $period + 1);
+            $window = array_filter(array_slice($arr, $windowStart, $i - $windowStart + 1), fn ($v) => $v !== null);
+            if (count($window) < $period) continue;
+            $out[$i] = array_sum($window) / count($window);
+        }
+        return $out;
+    }
+
+    /** EMA (Exponential Moving Average) standar */
+    private function exponentialMovingAverage(array $closes, int $period): array
+    {
+        $n = count($closes);
+        $ema = array_fill(0, $n, null);
+        if ($n < $period) return $ema;
+
+        $multiplier = 2 / ($period + 1);
+        $sma = array_sum(array_slice($closes, 0, $period)) / $period;
+        $ema[$period - 1] = $sma;
+
+        for ($i = $period; $i < $n; $i++) {
+            $ema[$i] = (($closes[$i] - $ema[$i - 1]) * $multiplier) + $ema[$i - 1];
+        }
+
+        return $ema;
+    }
+
+    /**
+     * MACD standar (12, 26, 9): garis MACD = EMA12 - EMA26, garis Signal = EMA9 dari garis MACD,
+     * Histogram = MACD - Signal.
+     */
+    private function calcMacd(array $closes, int $fast = 12, int $slow = 26, int $signalPeriod = 9): array
+    {
+        $n = count($closes);
+        $emaFast = $this->exponentialMovingAverage($closes, $fast);
+        $emaSlow = $this->exponentialMovingAverage($closes, $slow);
+
+        $macdLine = array_fill(0, $n, null);
+        for ($i = 0; $i < $n; $i++) {
+            if ($emaFast[$i] !== null && $emaSlow[$i] !== null) {
+                $macdLine[$i] = $emaFast[$i] - $emaSlow[$i];
+            }
+        }
+
+        // EMA dari macdLine, cuma dihitung dari titik pertama macdLine yang valid
+        $firstValidIndex = null;
+        foreach ($macdLine as $i => $v) {
+            if ($v !== null) { $firstValidIndex = $i; break; }
+        }
+
+        $macdSignal = array_fill(0, $n, null);
+        if ($firstValidIndex !== null) {
+            $validMacd = array_slice($macdLine, $firstValidIndex);
+            $signalOnValid = $this->exponentialMovingAverage($validMacd, $signalPeriod);
+            foreach ($signalOnValid as $offset => $v) {
+                $macdSignal[$firstValidIndex + $offset] = $v;
+            }
+        }
+
+        $macdHist = array_fill(0, $n, null);
+        for ($i = 0; $i < $n; $i++) {
+            if ($macdLine[$i] !== null && $macdSignal[$i] !== null) {
+                $macdHist[$i] = $macdLine[$i] - $macdSignal[$i];
+            }
+        }
+
+        return [$macdLine, $macdSignal, $macdHist];
     }
 
     private function cleanNumber($val)

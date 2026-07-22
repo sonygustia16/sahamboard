@@ -119,6 +119,28 @@
         </div>
         <div id="chartLoading" style="display:none; text-align:center; color:var(--muted); font-size:0.8rem; padding:0.5rem;">Memuat data...</div>
         <div id="chartEmpty" style="display:none; text-align:center; color:var(--muted); font-size:0.8rem; padding:0.5rem;">Belum ada data historis untuk saham ini di rentang waktu tersebut.</div>
+
+        {{-- Panel indikator tambahan: RSI, Stochastic RSI, MACD Histogram --}}
+        <div id="indicatorPanels" style="display:none; margin-top:1rem;">
+            <div style="margin-bottom:1rem;">
+                <div style="font-size:0.75rem; color:var(--muted); margin-bottom:0.3rem; font-family:var(--mono);">RSI 14</div>
+                <div style="position:relative; height:110px;">
+                    <canvas id="rsiChart"></canvas>
+                </div>
+            </div>
+            <div style="margin-bottom:1rem;">
+                <div style="font-size:0.75rem; color:var(--muted); margin-bottom:0.3rem; font-family:var(--mono);">Stochastic RSI 14,14,3,3</div>
+                <div style="position:relative; height:110px;">
+                    <canvas id="stochRsiChart"></canvas>
+                </div>
+            </div>
+            <div>
+                <div style="font-size:0.75rem; color:var(--muted); margin-bottom:0.3rem; font-family:var(--mono);">MACD 12,26,9</div>
+                <div style="position:relative; height:130px;">
+                    <canvas id="macdChart"></canvas>
+                </div>
+            </div>
+        </div>
     </div>
 
     {{-- Info banner — sekarang menampilkan info pagination --}}
@@ -305,6 +327,156 @@
 
     // ══ Klik-langsung-chart dengan timeframe selector ══
     let clickChartInstance = null;
+    let rsiChartInstance = null;
+    let stochRsiChartInstance = null;
+    let macdChartInstance = null;
+
+    /**
+     * Render 3 panel indikator (RSI, Stochastic RSI, MACD Histogram) di bawah chart utama.
+     * Warna sengaja pakai palet tema (cyan/ungu/amber), BUKAN hijau-merah standar TradingView —
+     * tapi cara baca sinyalnya tetap sama: RSI >70 = overbought, <30 = oversold, dst.
+     */
+    function renderIndicators(labels, rsi, stochK, stochD, macdLine, macdSignal, macdHist) {
+        Chart.defaults.color = '#94a3b8';
+        Chart.defaults.font.family = "'Inter', sans-serif";
+
+        const commonXAxis = {
+            grid: { display: false },
+            ticks: { color: '#64748b', maxRotation: 0, autoSkip: true, maxTicksLimit: 8 }
+        };
+        const commonGrid = { color: 'rgba(148,163,184,0.08)' };
+
+        // ── RSI ──
+        if (rsiChartInstance) rsiChartInstance.destroy();
+        rsiChartInstance = new Chart(document.getElementById('rsiChart').getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'RSI 14',
+                    data: rsi,
+                    borderColor: '#22d3ee',
+                    borderWidth: 1.8,
+                    pointRadius: 0,
+                    tension: 0.3,
+                    spanGaps: true
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    x: commonXAxis,
+                    y: { min: 0, max: 100, grid: commonGrid, ticks: { color: '#64748b', stepSize: 25 } }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#1e293b', borderColor: 'rgba(34,211,238,0.3)', borderWidth: 1,
+                        callbacks: { label: (ctx) => 'RSI: ' + (ctx.raw !== null ? ctx.raw.toFixed(1) : '-') }
+                    }
+                },
+                elements: { line: { borderJoinStyle: 'round' } }
+            },
+            plugins: [{
+                id: 'rsiRefLines',
+                afterDraw(chart) {
+                    const { ctx, chartArea, scales } = chart;
+                    const drawLine = (val, color) => {
+                        const y = scales.y.getPixelForValue(val);
+                        ctx.save();
+                        ctx.strokeStyle = color;
+                        ctx.setLineDash([4, 4]);
+                        ctx.lineWidth = 1;
+                        ctx.beginPath();
+                        ctx.moveTo(chartArea.left, y);
+                        ctx.lineTo(chartArea.right, y);
+                        ctx.stroke();
+                        ctx.restore();
+                    };
+                    drawLine(70, 'rgba(167,139,250,0.5)');
+                    drawLine(30, 'rgba(167,139,250,0.5)');
+                }
+            }]
+        });
+
+        // ── Stochastic RSI ──
+        if (stochRsiChartInstance) stochRsiChartInstance.destroy();
+        stochRsiChartInstance = new Chart(document.getElementById('stochRsiChart').getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    { label: '%K', data: stochK, borderColor: '#22d3ee', borderWidth: 1.8, pointRadius: 0, tension: 0.3, spanGaps: true },
+                    { label: '%D', data: stochD, borderColor: '#a78bfa', borderWidth: 1.8, pointRadius: 0, tension: 0.3, spanGaps: true, borderDash: [3, 2] }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    x: commonXAxis,
+                    y: { min: 0, max: 100, grid: commonGrid, ticks: { color: '#64748b', stepSize: 25 } }
+                },
+                plugins: {
+                    legend: { display: true, position: 'top', align: 'end', labels: { boxWidth: 10, font: { size: 10 } } },
+                    tooltip: {
+                        backgroundColor: '#1e293b', borderColor: 'rgba(34,211,238,0.3)', borderWidth: 1,
+                        callbacks: { label: (ctx) => ctx.dataset.label + ': ' + (ctx.raw !== null ? ctx.raw.toFixed(1) : '-') }
+                    }
+                }
+            },
+            plugins: [{
+                id: 'stochRefLines',
+                afterDraw(chart) {
+                    const { ctx, chartArea, scales } = chart;
+                    const drawLine = (val) => {
+                        const y = scales.y.getPixelForValue(val);
+                        ctx.save();
+                        ctx.strokeStyle = 'rgba(148,163,184,0.3)';
+                        ctx.setLineDash([4, 4]);
+                        ctx.lineWidth = 1;
+                        ctx.beginPath();
+                        ctx.moveTo(chartArea.left, y);
+                        ctx.lineTo(chartArea.right, y);
+                        ctx.stroke();
+                        ctx.restore();
+                    };
+                    drawLine(80);
+                    drawLine(20);
+                }
+            }]
+        });
+
+        // ── MACD (garis MACD, garis Signal, histogram) ──
+        if (macdChartInstance) macdChartInstance.destroy();
+        const histColors = macdHist.map(v => v === null ? 'transparent' : (v >= 0 ? 'rgba(34,211,238,0.55)' : 'rgba(167,139,250,0.55)'));
+        macdChartInstance = new Chart(document.getElementById('macdChart').getContext('2d'), {
+            data: {
+                labels: labels,
+                datasets: [
+                    { type: 'bar', label: 'Histogram', data: macdHist, backgroundColor: histColors, borderWidth: 0, order: 2 },
+                    { type: 'line', label: 'MACD', data: macdLine, borderColor: '#22d3ee', borderWidth: 1.6, pointRadius: 0, tension: 0.3, spanGaps: true, order: 0 },
+                    { type: 'line', label: 'Signal', data: macdSignal, borderColor: '#f59e0b', borderWidth: 1.6, pointRadius: 0, tension: 0.3, spanGaps: true, order: 1 }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    x: commonXAxis,
+                    y: { grid: commonGrid, ticks: { color: '#64748b', callback: (v) => v.toFixed(0) } }
+                },
+                plugins: {
+                    legend: { display: true, position: 'top', align: 'end', labels: { boxWidth: 10, font: { size: 10 } } },
+                    tooltip: {
+                        backgroundColor: '#1e293b', borderColor: 'rgba(34,211,238,0.3)', borderWidth: 1,
+                        callbacks: { label: (ctx) => ctx.dataset.label + ': ' + (ctx.raw !== null ? ctx.raw.toFixed(2) : '-') }
+                    }
+                }
+            }
+        });
+    }
     let activeStockCode = null;
     let activeTimeframe = '1m';
 
@@ -370,10 +542,13 @@
                 if (!data.values || data.values.length === 0) {
                     canvas.style.display = 'none';
                     emptyEl.style.display = 'block';
+                    document.getElementById('indicatorPanels').style.display = 'none';
                     return;
                 }
 
                 renderClickChart(data.labels, data.values, data.closes);
+                document.getElementById('indicatorPanels').style.display = 'block';
+                renderIndicators(data.labels, data.rsi, data.stoch_k, data.stoch_d, data.macd_line, data.macd_signal, data.macd_hist);
             })
             .catch(() => {
                 loadingEl.style.display = 'none';
