@@ -226,14 +226,12 @@ class StockFilterController extends Controller
         $daysMap = ['7d' => 7, '1m' => 30, '3m' => 90, '6m' => 180, '1y' => 365];
         $days = $daysMap[$timeframe] ?? 30;
 
-        // Ambil data ekstra 100 hari SEBELUM rentang tampilan, khusus buat "pemanasan"
-        // perhitungan indikator (RSI/MACD butuh histori sebelum titik pertama supaya akurat,
-        // bukan cuma buat data yang ditampilkan di chart).
-        $warmupDays = $days + 100;
-
+        // Ambil SEMUA histori yang ada untuk saham ini (bukan cuma warm-up terbatas),
+        // supaya perhitungan RSI/Stochastic RSI/MACD didasarkan pada seluruh data historis
+        // yang tersedia — sama seperti Stockbit/TradingView, yang menghitung indikator dari
+        // seluruh histori harga yang mereka punya, bukan cuma jendela pendek sebelum tampilan.
         $rows = RingkasanSaham::query()
             ->where('stock_code', $stockCode)
-            ->where('date', '>=', now()->subDays($warmupDays)->toDateString())
             ->orderBy('date', 'asc')
             ->get(['date', 'value', 'close']);
 
