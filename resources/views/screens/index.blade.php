@@ -111,6 +111,10 @@
                 <button type="button" class="btn btn-ghost tf-btn" data-tf="3m" style="padding:0.3rem 0.7rem; font-size:0.75rem;">3M</button>
                 <button type="button" class="btn btn-ghost tf-btn" data-tf="6m" style="padding:0.3rem 0.7rem; font-size:0.75rem;">6M</button>
                 <button type="button" class="btn btn-ghost tf-btn" data-tf="1y" style="padding:0.3rem 0.7rem; font-size:0.75rem;">1Y</button>
+                <button type="button" class="btn btn-ghost tf-btn" data-tf="2y" style="padding:0.3rem 0.7rem; font-size:0.75rem;">2Y</button>
+                <button type="button" class="btn btn-ghost tf-btn" data-tf="3y" style="padding:0.3rem 0.7rem; font-size:0.75rem;">3Y</button>
+                <button type="button" class="btn btn-ghost tf-btn" data-tf="5y" style="padding:0.3rem 0.7rem; font-size:0.75rem;">5Y</button>
+                <button type="button" class="btn btn-ghost tf-btn" data-tf="all" style="padding:0.3rem 0.7rem; font-size:0.75rem;">All</button>
             </div>
         </div>
 
