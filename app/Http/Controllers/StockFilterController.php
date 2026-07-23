@@ -216,24 +216,46 @@ class StockFilterController extends Controller
      * Endpoint JSON ringan untuk chart klik-langsung di tabel filter.
      * Dipanggil via fetch() dari JS, bukan reload halaman.
      * Data selalu dari tabel ringkasan_saham (database), bukan hardcode.
-     * Sekarang kirim 2 seri: value (Value NR) dan close (Close Price).
+     * Kirim beberapa seri: value (Value NR), close (Close Price),
+     * ma50 & ma200 (Moving Average -- untuk deteksi visual Golden/Death Cross),
+     * plus RSI/StochRSI/MACD seperti sebelumnya.
+     *
+     * PERUBAHAN:
+     * - $daysMap ditambah opsi 2y/3y/5y/all supaya histori panjang (yang sudah
+     *   ditarik sampai 2023) bisa benar-benar diakses dari UI, bukan cuma
+     *   tersimpan di database tapi tidak bisa dilihat.
+     * - Ditambahkan perhitungan Moving Average (default 50 & 200 hari) supaya
+     *   Golden Cross / Death Cross bisa digambar di chart harga.
      */
     public function chartData(Request $request, string $stockCode)
     {
         $stockCode = strtoupper($stockCode);
         $timeframe = $request->query('timeframe', '1m');
 
-        $daysMap = ['7d' => 7, '1m' => 30, '3m' => 90, '6m' => 180, '1y' => 365];
-        $days = $daysMap[$timeframe] ?? 30;
+        // 'all' => null berarti TIDAK dipotong sama sekali, tampilkan seluruh
+        // histori yang ada di database untuk saham ini.
+        $daysMap = [
+            '7d'  => 7,
+            '1m'  => 30,
+            '3m'  => 90,
+            '6m'  => 180,
+            '1y'  => 365,
+            '2y'  => 730,
+            '3y'  => 1095,
+            '5y'  => 1825,
+            'all' => null,
+        ];
+        $days = array_key_exists($timeframe, $daysMap) ? $daysMap[$timeframe] : 30;
 
         // Ambil SEMUA histori yang ada untuk saham ini (bukan cuma warm-up terbatas),
-        // supaya perhitungan RSI/Stochastic RSI/MACD didasarkan pada seluruh data historis
-        // yang tersedia — sama seperti Stockbit/TradingView, yang menghitung indikator dari
-        // seluruh histori harga yang mereka punya, bukan cuma jendela pendek sebelum tampilan.
+        // supaya perhitungan RSI/Stochastic RSI/MACD/MA didasarkan pada seluruh data
+        // historis yang tersedia -- sama seperti Stockbit/TradingView, yang menghitung
+        // indikator dari seluruh histori harga yang mereka punya, bukan cuma jendela
+        // pendek sebelum tampilan.
         $rows = RingkasanSaham::query()
             ->where('stock_code', $stockCode)
             ->orderBy('date', 'asc')
-            ->get(['date', 'value', 'close']);
+            ->get(['date', 'value', 'close', 'previous']);
 
         $closesAll = $rows->map(fn ($r) => (float) $r->close)->values()->all();
 
@@ -241,10 +263,23 @@ class StockFilterController extends Controller
         [$stochKAll, $stochDAll] = $this->calcStochRsi($closesAll, 14, 14, 3, 3);
         [$macdLineAll, $macdSignalAll, $macdHistAll] = $this->calcMacd($closesAll, 12, 26, 9);
 
-        // Potong lagi cuma bagian yang mau ditampilkan (buang periode warm-up)
-        $cutoffDate = now()->subDays($days)->toDateString();
-        $displayRows = $rows->filter(fn ($r) => $r->date >= $cutoffDate)->values();
-        $startIndex = $rows->count() - $displayRows->count();
+        // Moving Average 50 & 200 hari -- basis deteksi Golden Cross (MA50 memotong
+        // ke atas MA200) / Death Cross (MA50 memotong ke bawah MA200). Fungsi
+        // simpleMovingAverage() sudah ada sebelumnya (dipakai untuk smoothing
+        // Stochastic RSI), di sini dipakai ulang langsung ke deret harga Close.
+        $ma50All  = $this->simpleMovingAverage($closesAll, 50);
+        $ma200All = $this->simpleMovingAverage($closesAll, 200);
+
+        // Potong lagi cuma bagian yang mau ditampilkan (buang periode warm-up),
+        // KECUALI kalau timeframe = 'all' -> tampilkan semuanya tanpa dipotong.
+        if ($days === null) {
+            $displayRows = $rows;
+            $startIndex  = 0;
+        } else {
+            $cutoffDate  = now()->subDays($days)->toDateString();
+            $displayRows = $rows->filter(fn ($r) => $r->date >= $cutoffDate)->values();
+            $startIndex  = $rows->count() - $displayRows->count();
+        }
 
         $slice = fn ($arr) => array_values(array_slice($arr, $startIndex));
 
@@ -254,12 +289,15 @@ class StockFilterController extends Controller
             'labels'       => $displayRows->map(fn ($r) => \Illuminate\Support\Carbon::parse($r->date)->format('d M y'))->all(),
             'values'       => $displayRows->map(fn ($r) => (float) $r->value)->all(),
             'closes'       => $displayRows->map(fn ($r) => (float) $r->close)->all(),
+            'previous'     => $displayRows->map(fn ($r) => (float) $r->previous)->all(),
             'rsi'          => $slice($rsiAll),
             'stoch_k'      => $slice($stochKAll),
             'stoch_d'      => $slice($stochDAll),
             'macd_line'    => $slice($macdLineAll),
             'macd_signal'  => $slice($macdSignalAll),
             'macd_hist'    => $slice($macdHistAll),
+            'ma50'         => $slice($ma50All),
+            'ma200'        => $slice($ma200All),
         ]);
     }
 
