@@ -120,10 +120,6 @@
                 <button type="button" class="btn btn-ghost tf-btn" data-tf="3m" style="padding:0.3rem 0.7rem; font-size:0.75rem;">3M</button>
                 <button type="button" class="btn btn-ghost tf-btn" data-tf="6m" style="padding:0.3rem 0.7rem; font-size:0.75rem;">6M</button>
                 <button type="button" class="btn btn-ghost tf-btn" data-tf="1y" style="padding:0.3rem 0.7rem; font-size:0.75rem;">1Y</button>
-                <button type="button" class="btn btn-ghost tf-btn" data-tf="2y" style="padding:0.3rem 0.7rem; font-size:0.75rem;">2Y</button>
-                <button type="button" class="btn btn-ghost tf-btn" data-tf="3y" style="padding:0.3rem 0.7rem; font-size:0.75rem;">3Y</button>
-                <button type="button" class="btn btn-ghost tf-btn" data-tf="5y" style="padding:0.3rem 0.7rem; font-size:0.75rem;">5Y</button>
-                <button type="button" class="btn btn-ghost tf-btn" data-tf="all" style="padding:0.3rem 0.7rem; font-size:0.75rem;">All</button>
             </div>
         </div>
 
@@ -136,25 +132,89 @@
         <div id="chartLoading" style="display:none; text-align:center; color:var(--muted); font-size:0.8rem; padding:0.5rem;">Memuat data...</div>
         <div id="chartEmpty" style="display:none; text-align:center; color:var(--muted); font-size:0.8rem; padding:0.5rem;">Belum ada data historis untuk saham ini di rentang waktu tersebut.</div>
 
-        {{-- Panel indikator tambahan: RSI, Stochastic RSI, MACD Histogram --}}
+        {{-- ══════════════════════════════════════════════════════════
+             Tab switcher: Indikator vs Broker Summary
+             (menggantikan tumpukan RSI/Stoch/MACD/Broker yang panjang
+             ke bawah — sekarang cuma 1 panel aktif dalam satu waktu)
+             ══════════════════════════════════════════════════════════ --}}
         <div id="indicatorPanels" style="display:none; margin-top:1rem;">
-            <div style="margin-bottom:1rem;">
-                <div style="font-size:0.75rem; color:var(--muted); margin-bottom:0.3rem; font-family:var(--mono);">RSI 14</div>
-                <div style="position:relative; height:110px;">
-                    <canvas id="rsiChart"></canvas>
+            <div style="display:flex; gap:0.3rem; margin-bottom:0.8rem; border-bottom:1px solid var(--border);">
+                <button type="button" class="btn btn-ghost panel-tab-btn active" data-panel="indicators" style="padding:0.5rem 1rem; font-size:0.78rem; border-radius:6px 6px 0 0; border-bottom:2px solid var(--cyan);">📈 Indikator</button>
+                <button type="button" class="btn btn-ghost panel-tab-btn" data-panel="broker" style="padding:0.5rem 1rem; font-size:0.78rem; border-radius:6px 6px 0 0; border-bottom:2px solid transparent;">🧾 Broker Summary</button>
+            </div>
+
+            {{-- Panel: Indikator (RSI, Stoch RSI, MACD) --}}
+            <div id="panelIndicators" class="tab-panel">
+                <div style="margin-bottom:1rem;">
+                    <div style="font-size:0.75rem; color:var(--muted); margin-bottom:0.3rem; font-family:var(--mono);">RSI 14</div>
+                    <div style="position:relative; height:110px;">
+                        <canvas id="rsiChart"></canvas>
+                    </div>
+                </div>
+                <div style="margin-bottom:1rem;">
+                    <div style="font-size:0.75rem; color:var(--muted); margin-bottom:0.3rem; font-family:var(--mono);">Stochastic RSI 14,14,3,3</div>
+                    <div style="position:relative; height:110px;">
+                        <canvas id="stochRsiChart"></canvas>
+                    </div>
+                </div>
+                <div>
+                    <div style="font-size:0.75rem; color:var(--muted); margin-bottom:0.3rem; font-family:var(--mono);">MACD 12,26,9</div>
+                    <div style="position:relative; height:130px;">
+                        <canvas id="macdChart"></canvas>
+                    </div>
                 </div>
             </div>
-            <div style="margin-bottom:1rem;">
-                <div style="font-size:0.75rem; color:var(--muted); margin-bottom:0.3rem; font-family:var(--mono);">Stochastic RSI 14,14,3,3</div>
-                <div style="position:relative; height:110px;">
-                    <canvas id="stochRsiChart"></canvas>
+
+            {{-- Panel: Broker Summary --}}
+            <div id="panelBroker" class="tab-panel" style="display:none;">
+
+                {{-- Baris kontrol: rentang tanggal + limit + toggle gross/net --}}
+                <div style="display:flex; flex-wrap:wrap; align-items:end; gap:0.6rem; margin-bottom:0.8rem; padding:0.6rem 0.8rem; background:var(--panel-2); border:1px solid var(--border); border-radius:8px;">
+                    <div class="form-group" style="margin:0;">
+                        <label style="font-size:0.65rem;">Start Date</label>
+                        <input type="date" id="brokerStartDate" style="font-size:0.78rem; padding:0.3rem 0.5rem;">
+                    </div>
+                    <div class="form-group" style="margin:0;">
+                        <label style="font-size:0.65rem;">End Date</label>
+                        <input type="date" id="brokerEndDate" style="font-size:0.78rem; padding:0.3rem 0.5rem;">
+                    </div>
+
+                    {{-- Toggle Gross / Net --}}
+                    <div style="display:flex; align-items:center; gap:0.4rem; margin-left:auto;">
+                        <span id="brokerModeLabelGross" style="font-size:0.72rem; font-weight:700; color:var(--cyan);">Gross</span>
+                        <label class="broker-switch">
+                            <input type="checkbox" id="brokerNetToggle">
+                            <span class="broker-switch-slider"></span>
+                        </label>
+                        <span id="brokerModeLabelNet" style="font-size:0.72rem; color:var(--muted);">Net</span>
+                    </div>
+
+                    <button type="button" class="btn btn-ghost" id="brokerAllDataToggle" style="padding:0.35rem 0.7rem; font-size:0.72rem;" data-active="0">All Data</button>
+                    <button type="button" class="btn btn-primary" id="brokerApplyBtn" style="padding:0.35rem 0.9rem; font-size:0.72rem;">Terapkan</button>
                 </div>
-            </div>
-            <div>
-                <div style="font-size:0.75rem; color:var(--muted); margin-bottom:0.3rem; font-family:var(--mono);">MACD 12,26,9</div>
-                <div style="position:relative; height:130px;">
-                    <canvas id="macdChart"></canvas>
+
+                <div id="brokerLoading" style="display:none; text-align:center; color:var(--muted); font-size:0.8rem; padding:0.5rem;">Memuat data broker...</div>
+                <div id="brokerEmpty" style="display:none; text-align:center; color:var(--muted); font-size:0.8rem; padding:0.5rem;">Data broker tidak tersedia untuk saham/rentang ini.</div>
+
+                <div id="brokerTableWrap" style="display:none; overflow-x:auto; max-height:380px; overflow-y:auto;">
+                    <table style="width:100%; font-size:0.78rem; border-collapse:collapse;">
+                        <thead style="position:sticky; top:0; background:var(--panel); z-index:1;">
+                            <tr style="color:var(--muted); text-align:right;">
+                                <th style="text-align:center; padding:0.4rem 0.3rem;">#</th>
+                                <th style="text-align:left; padding:0.4rem 0.3rem;" id="brokerColBuyLabel">Buy</th>
+                                <th style="padding:0.4rem 0.3rem;">B.Val</th>
+                                <th style="padding:0.4rem 0.3rem;">B.Lot</th>
+                                <th style="padding:0.4rem 0.3rem;">B.Avg</th>
+                                <th style="text-align:left; padding:0.4rem 0.3rem;" id="brokerColSellLabel">Sell</th>
+                                <th style="padding:0.4rem 0.3rem;">S.Val</th>
+                                <th style="padding:0.4rem 0.3rem;">S.Lot</th>
+                                <th style="padding:0.4rem 0.3rem;">S.Avg</th>
+                            </tr>
+                        </thead>
+                        <tbody id="brokerTableBody"></tbody>
+                    </table>
                 </div>
+                <div id="brokerDateRange" style="margin-top:0.4rem; font-size:0.7rem; color:var(--muted); text-align:right;"></div>
             </div>
         </div>
 
@@ -296,6 +356,38 @@
 @endsection
 
 @push('body-scripts')
+<style>
+    .tf-btn.active { background: var(--cyan); color: #0a0e1a; border-color: var(--cyan); }
+    .star-btn {
+        background: none; border: none; cursor: pointer; font-size: 1.2rem; line-height: 1;
+        color: var(--muted); padding: 0.15rem; transition: transform 0.15s, color 0.15s;
+    }
+    .star-btn:hover { transform: scale(1.2); color: #fbbf24; }
+    .star-btn.star-active { color: #fbbf24; }
+    tr.active-row td {
+        background: rgba(34,211,238,0.10) !important;
+        border-top: 1px solid rgba(34,211,238,0.35) !important;
+        border-bottom: 1px solid rgba(34,211,238,0.35) !important;
+    }
+    tr.active-row td:first-child { border-left: 1px solid rgba(34,211,238,0.35) !important; border-radius: 8px 0 0 8px; }
+    tr.active-row td:last-child { border-right: 1px solid rgba(34,211,238,0.35) !important; border-radius: 0 8px 8px 0; }
+
+    /* ══ Broker Summary switch (Gross/Net toggle) ══ */
+    .broker-switch { position: relative; display: inline-block; width: 38px; height: 20px; }
+    .broker-switch input { opacity: 0; width: 0; height: 0; }
+    .broker-switch-slider {
+        position: absolute; cursor: pointer; inset: 0;
+        background: var(--panel-2); border: 1px solid var(--border);
+        transition: 0.2s; border-radius: 20px;
+    }
+    .broker-switch-slider:before {
+        position: absolute; content: ""; height: 14px; width: 14px;
+        left: 2px; bottom: 2px; background: var(--muted);
+        transition: 0.2s; border-radius: 50%;
+    }
+    .broker-switch input:checked + .broker-switch-slider { background: rgba(34,211,238,0.25); border-color: var(--cyan); }
+    .broker-switch input:checked + .broker-switch-slider:before { transform: translateX(18px); background: var(--cyan); }
+</style>
 <script>
     // Data preset dari server (untuk applyPreset)
     const SAVED_FILTERS = {!! $savedFilters->map(fn($p) => [
@@ -574,6 +666,13 @@
                 updateSignalBadge(data.values, data.closes);
                 document.getElementById('indicatorPanels').style.display = 'block';
                 renderIndicators(data.labels, data.rsi, data.stoch_k, data.stoch_d, data.macd_line, data.macd_signal, data.macd_hist);
+
+                // Broker Summary di-load kalau tab-nya sedang aktif, atau di-reset flag-nya
+                // supaya ke-load ulang ketika user pindah ke tab Broker (kode saham beda).
+                delete brokerLoadedForCode[code];
+                if (document.getElementById('panelBroker').style.display !== 'none') {
+                    loadBrokerSummary(code);
+                }
             })
             .catch(() => {
                 loadingEl.style.display = 'none';
@@ -799,21 +898,184 @@
             }
         });
     });
+
+    // ══════════════════════════════════════════════════════════
+    // Tab switcher: Indikator vs Broker Summary
+    // ══════════════════════════════════════════════════════════
+    document.querySelectorAll('.panel-tab-btn').forEach(btn => {
+        btn.addEventListener('click', function () {
+            document.querySelectorAll('.panel-tab-btn').forEach(b => {
+                b.classList.remove('active');
+                b.style.borderBottom = '2px solid transparent';
+            });
+            this.classList.add('active');
+            this.style.borderBottom = '2px solid var(--cyan)';
+
+            const target = this.dataset.panel;
+            document.getElementById('panelIndicators').style.display = target === 'indicators' ? 'block' : 'none';
+            document.getElementById('panelBroker').style.display = target === 'broker' ? 'block' : 'none';
+
+            // Broker data baru di-load pertama kali tab-nya dibuka (hemat request)
+            if (target === 'broker' && activeStockCode && !brokerLoadedForCode[activeStockCode]) {
+                loadBrokerSummary(activeStockCode);
+            }
+        });
+    });
+
+    // ══════════════════════════════════════════════════════════
+    // Broker Summary panel — konsumsi API cuan.jumari.app/api/broker-summary/{code}
+    // ══════════════════════════════════════════════════════════
+    let brokerAllDataActive = false;
+    const brokerLoadedForCode = {}; // cache flag: sudah pernah di-load utk kode ini di sesi ini
+
+    function formatSingkatBroker(num) {
+        const abs = Math.abs(num || 0);
+        const sign = num < 0 ? '-' : '';
+        if (abs >= 1e12) return sign + (abs / 1e12).toFixed(2).replace('.', ',') + ' T';
+        if (abs >= 1e9)  return sign + (abs / 1e9).toFixed(2).replace('.', ',') + ' M';
+        if (abs >= 1e6)  return sign + (abs / 1e6).toFixed(2).replace('.', ',') + ' Jt';
+        if (abs >= 1e3)  return sign + (abs / 1e3).toFixed(0) + ' Rb';
+        return new Intl.NumberFormat('id-ID').format(num || 0);
+    }
+
+    function renderBrokerTable(levels, net) {
+        const tbody = document.getElementById('brokerTableBody');
+        tbody.innerHTML = '';
+
+        levels.forEach((lvl, idx) => {
+            const buy = lvl.buy;
+            const sell = lvl.sell;
+
+            // Gross mode: field standar bval/bvol/sval/svol, avg dihitung manual.
+            // Net mode: field sama namanya tapi isinya net value/volume, avg pakai bavg/savg dari API.
+            const buyCode = buy ? buy.broker_code : '-';
+            const buyVal = buy ? formatSingkatBroker(buy.bval) : '-';
+            const buyLot = buy ? formatSingkatBroker(buy.bvol) : '-';
+            const buyAvg = buy
+                ? (net
+                    ? (buy.bavg !== null && buy.bavg !== undefined ? buy.bavg.toFixed(2) : '-')
+                    : (buy.bvol ? (buy.bval / buy.bvol).toFixed(2) : '-'))
+                : '-';
+
+            const sellCode = sell ? sell.broker_code : '-';
+            const sellVal = sell ? formatSingkatBroker(sell.sval) : '-';
+            const sellLot = sell ? formatSingkatBroker(sell.svol) : '-';
+            const sellAvg = sell
+                ? (net
+                    ? (sell.savg !== null && sell.savg !== undefined ? sell.savg.toFixed(2) : '-')
+                    : (sell.svol ? (sell.sval / sell.svol).toFixed(2) : '-'))
+                : '-';
+
+            const tr = document.createElement('tr');
+            tr.style.borderTop = '1px solid var(--border)';
+            tr.innerHTML = `
+                <td style="text-align:center; padding:0.4rem 0.3rem; color:var(--muted);">${idx + 1}</td>
+                <td style="text-align:left; padding:0.4rem 0.3rem;"><span class="code-pill">${buyCode}</span></td>
+                <td style="text-align:right; padding:0.4rem 0.3rem; color:#10b981;">${buyVal}</td>
+                <td style="text-align:right; padding:0.4rem 0.3rem;">${buyLot}</td>
+                <td style="text-align:right; padding:0.4rem 0.3rem;">${buyAvg}</td>
+                <td style="text-align:left; padding:0.4rem 0.3rem;"><span class="code-pill">${sellCode}</span></td>
+                <td style="text-align:right; padding:0.4rem 0.3rem; color:#f43f5e;">${sellVal}</td>
+                <td style="text-align:right; padding:0.4rem 0.3rem;">${sellLot}</td>
+                <td style="text-align:right; padding:0.4rem 0.3rem;">${sellAvg}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function updateBrokerModeLabels(net) {
+        const gross = document.getElementById('brokerModeLabelGross');
+        const netLbl = document.getElementById('brokerModeLabelNet');
+        gross.style.color = net ? 'var(--muted)' : 'var(--cyan)';
+        gross.style.fontWeight = net ? '400' : '700';
+        netLbl.style.color = net ? 'var(--cyan)' : 'var(--muted)';
+        netLbl.style.fontWeight = net ? '700' : '400';
+
+        // Kolom Buy = top net buyer, Sell = top net seller kalau mode net aktif
+        document.getElementById('brokerColBuyLabel').textContent = net ? 'Buy (Net+)' : 'Buy';
+        document.getElementById('brokerColSellLabel').textContent = net ? 'Sell (Net-)' : 'Sell';
+    }
+
+    function loadBrokerSummary(code) {
+        if (!code) return;
+
+        const loadingEl = document.getElementById('brokerLoading');
+        const emptyEl = document.getElementById('brokerEmpty');
+        const wrapEl = document.getElementById('brokerTableWrap');
+
+        loadingEl.style.display = 'block';
+        emptyEl.style.display = 'none';
+        wrapEl.style.display = 'none';
+
+        const net = document.getElementById('brokerNetToggle').checked;
+        const startDate = document.getElementById('brokerStartDate').value;
+        const endDate = document.getElementById('brokerEndDate').value;
+
+        updateBrokerModeLabels(net);
+
+        const params = new URLSearchParams();
+        if (startDate) params.set('start_date', startDate);
+        if (endDate) params.set('end_date', endDate);
+        if (net) params.set('net', '1');
+
+        if (brokerAllDataActive) {
+            params.set('all_data', '1');
+        } else {
+            params.set('broker_limit', '10');
+            params.set('level_limit', '8');
+        }
+
+        fetch(`/broker-summary/${code}?${params.toString()}`, { headers: { 'Accept': 'application/json' } })
+            .then(res => {
+                if (!res.ok) throw new Error('not ok');
+                return res.json();
+            })
+            .then(data => {
+                loadingEl.style.display = 'none';
+                brokerLoadedForCode[code] = true;
+
+                if (!data.broker_levels || data.broker_levels.length === 0) {
+                    emptyEl.style.display = 'block';
+                    return;
+                }
+
+                // Isi input tanggal dengan rentang yang benar-benar dipakai backend
+                // (berguna kalau user belum isi tanggal sama sekali -> otomatis terisi default API)
+                if (!startDate && data.broker_start_date) {
+                    document.getElementById('brokerStartDate').value = data.broker_start_date;
+                }
+                if (!endDate && data.broker_end_date) {
+                    document.getElementById('brokerEndDate').value = data.broker_end_date;
+                }
+
+                renderBrokerTable(data.broker_levels, net);
+                document.getElementById('brokerDateRange').textContent =
+                    `Periode: ${data.broker_start_date} s/d ${data.broker_end_date}` +
+                    (data.broker_date_min ? ` · Data tersedia dari ${data.broker_date_min} s/d ${data.broker_date_max}` : '');
+                wrapEl.style.display = 'block';
+            })
+            .catch(() => {
+                loadingEl.style.display = 'none';
+                emptyEl.textContent = 'Gagal memuat data broker. Coba lagi.';
+                emptyEl.style.display = 'block';
+            });
+    }
+
+    document.getElementById('brokerApplyBtn').addEventListener('click', function () {
+        if (activeStockCode) loadBrokerSummary(activeStockCode);
+    });
+
+    document.getElementById('brokerNetToggle').addEventListener('change', function () {
+        if (activeStockCode) loadBrokerSummary(activeStockCode);
+    });
+
+    document.getElementById('brokerAllDataToggle').addEventListener('click', function () {
+        brokerAllDataActive = !brokerAllDataActive;
+        this.dataset.active = brokerAllDataActive ? '1' : '0';
+        this.style.background = brokerAllDataActive ? 'var(--cyan)' : '';
+        this.style.color = brokerAllDataActive ? '#0a0e1a' : '';
+        this.style.borderColor = brokerAllDataActive ? 'var(--cyan)' : '';
+        if (activeStockCode) loadBrokerSummary(activeStockCode);
+    });
 </script>
-<style>
-    .tf-btn.active { background: var(--cyan); color: #0a0e1a; border-color: var(--cyan); }
-    .star-btn {
-        background: none; border: none; cursor: pointer; font-size: 1.2rem; line-height: 1;
-        color: var(--muted); padding: 0.15rem; transition: transform 0.15s, color 0.15s;
-    }
-    .star-btn:hover { transform: scale(1.2); color: #fbbf24; }
-    .star-btn.star-active { color: #fbbf24; }
-    tr.active-row td {
-        background: rgba(34,211,238,0.10) !important;
-        border-top: 1px solid rgba(34,211,238,0.35) !important;
-        border-bottom: 1px solid rgba(34,211,238,0.35) !important;
-    }
-    tr.active-row td:first-child { border-left: 1px solid rgba(34,211,238,0.35) !important; border-radius: 8px 0 0 8px; }
-    tr.active-row td:last-child { border-right: 1px solid rgba(34,211,238,0.35) !important; border-radius: 0 8px 8px 0; }
-</style>
 @endpush

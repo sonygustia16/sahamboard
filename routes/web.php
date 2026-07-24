@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\BrokerSummaryController;
 use App\Http\Controllers\StockFilterController;
 use App\Http\Controllers\StockAnalysisController;
 use App\Http\Controllers\EntryPlanController;
@@ -25,12 +26,13 @@ Route::middleware('throttle:10,1')->group(function () {
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
 Route::middleware(EnsureAuthenticated::class)->group(function () {
-    // Rate limit lebih longgar untuk halaman yang manggil Yahoo Finance API,
+    // Rate limit lebih longgar untuk halaman yang manggil Yahoo Finance API / Broker Summary API,
     // supaya tidak gampang disalahgunakan untuk hammer request ke server eksternal.
     Route::middleware('throttle:60,1')->group(function () {
         Route::get('/', [StockFilterController::class, 'index'])->name('index');
         Route::get('/screening', [StockFilterController::class, 'screening'])->name('screening.index');
         Route::get('/chart-data/{stockCode}', [StockFilterController::class, 'chartData'])->name('chart-data');
+        Route::get('/broker-summary/{stockCode}', [BrokerSummaryController::class, 'show'])->name('broker-summary.show');
         Route::get('/analysis', [StockAnalysisController::class, 'index'])->name('analysis.index');
         Route::get('/watchlist', [WatchlistController::class, 'index'])->name('watchlist.index');
     });
@@ -55,4 +57,3 @@ Route::middleware(EnsureAuthenticated::class)->group(function () {
     Route::post('/watchlist', [WatchlistController::class, 'store'])->name('watchlist.store');
     Route::delete('/watchlist/{watchlist}', [WatchlistController::class, 'destroy'])->name('watchlist.destroy');
 });
-
