@@ -844,12 +844,20 @@
                     }
                 },
                 plugins: {
-                    legend: {
-                        display: true,
-                        position: 'top',
-                        align: 'end',
-                        labels: { color: '#94a3b8', boxWidth: 12, font: { size: 11 } }
-                    },
+                   legend: {
+    display: true,
+    position: 'top',
+    align: 'end',
+    labels: {
+        color: '#94a3b8',
+        boxWidth: 12,
+        font: { size: 11 },
+        filter: function (legendItem, chartData) {
+            const ds = chartData.datasets[legendItem.datasetIndex];
+            return !ds || !ds.brokerCode; // sembunyikan dataset broker dari legend
+        }
+    }
+},
                     tooltip: {
                         backgroundColor: '#1e293b',
                         borderColor: 'rgba(34,211,238,0.3)',
@@ -874,30 +882,36 @@
                         footerFont: { weight: '600', size: 11 },
                         padding: 10,
                         callbacks: {
-                            label: function(context) {
-                                if (context.dataset.brokerCode) {
-                                    return context.dataset.label + ': ' + formatFlowValue(context.raw);
-                                }
-                                if (context.dataset.yAxisID === 'yClose') {
-                                    return 'Close: Rp ' + new Intl.NumberFormat('id-ID').format(context.raw);
-                                }
-                                return 'Value NR: Rp ' + formatSingkat(context.raw);
-                            },
-                            footer: function(items) {
-                                const idx = items[0].dataIndex;
-                                if (idx === 0) return '';
+    label: function(context) {
+        if (context.dataset.brokerCode) {
+            return context.dataset.brokerCode + ': ' + formatFlowValue(context.raw);
+        }
+        if (context.dataset.yAxisID === 'yClose') {
+            return 'Close: Rp ' + new Intl.NumberFormat('id-ID').format(context.raw);
+        }
+        return 'Value NR: Rp ' + formatSingkat(context.raw);
+    },
+    labelTextColor: function(context) {
+        if (context.dataset.brokerCode) {
+            return context.raw >= 0 ? '#10b981' : '#f43f5e';
+        }
+        return '#e2e8f0';
+    },
+    footer: function(items) {
+        const idx = items[0].dataIndex;
+        if (idx === 0) return '';
 
-                                const valPct = pctChange(currentChartValues[idx - 1], currentChartValues[idx]);
-                                const closePct = pctChange(currentChartCloses[idx - 1], currentChartCloses[idx]);
+        const valPct = pctChange(currentChartValues[idx - 1], currentChartValues[idx]);
+        const closePct = pctChange(currentChartCloses[idx - 1], currentChartCloses[idx]);
 
-                                if (closePct <= -SIGNAL_CLOSE_PCT_THRESHOLD && valPct >= SIGNAL_VALUE_PCT_THRESHOLD) {
-                                    return `🟢 Close turun ${closePct.toFixed(1)}%, Value naik ${valPct.toFixed(0)}% — berpotensi akumulasi`;
-                                } else if (closePct >= SIGNAL_CLOSE_PCT_THRESHOLD && valPct <= -SIGNAL_VALUE_PCT_THRESHOLD) {
-                                    return `🟡 Close naik ${closePct.toFixed(1)}%, Value turun ${Math.abs(valPct).toFixed(0)}% — hati-hati`;
-                                }
-                                return '';
-                            }
-                        }
+        if (closePct <= -SIGNAL_CLOSE_PCT_THRESHOLD && valPct >= SIGNAL_VALUE_PCT_THRESHOLD) {
+            return `🟢 Close turun ${closePct.toFixed(1)}%, Value naik ${valPct.toFixed(0)}% — berpotensi akumulasi`;
+        } else if (closePct >= SIGNAL_CLOSE_PCT_THRESHOLD && valPct <= -SIGNAL_VALUE_PCT_THRESHOLD) {
+            return `🟡 Close naik ${closePct.toFixed(1)}%, Value turun ${Math.abs(valPct).toFixed(0)}% — hati-hati`;
+        }
+        return '';
+    }
+}
                     }
                 }
             }
