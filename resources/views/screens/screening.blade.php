@@ -133,10 +133,35 @@
         <div id="chartEmpty" style="display:none; text-align:center; color:var(--muted); font-size:0.8rem; padding:0.5rem;">Belum ada data historis untuk saham ini di rentang waktu tersebut.</div>
 
         {{-- ══════════════════════════════════════════════════════════
-             Tab switcher: Indikator vs Broker Summary
-             (menggantikan tumpukan RSI/Stoch/MACD/Broker yang panjang
-             ke bawah — sekarang cuma 1 panel aktif dalam satu waktu)
+             Broker Flow Overlay — menyatu langsung di chart Value NR
+             di atas (bukan chart/tab terpisah). Toggle ON/OFF + legend
+             chip broker (klik buat sembunyikan/tampilkan garis broker).
              ══════════════════════════════════════════════════════════ --}}
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.5rem; margin-top:0.6rem;">
+            <div style="display:flex; align-items:center; gap:0.5rem;">
+                <label class="broker-switch">
+                    <input type="checkbox" id="flowOverlayToggle">
+                    <span class="broker-switch-slider"></span>
+                </label>
+                <span style="font-size:0.78rem; color:var(--ink); font-weight:600;">🌊 Broker Flow Overlay</span>
+                <span id="flowOverlayLoadingTag" style="display:none; font-size:0.7rem; color:var(--muted);">memuat...</span>
+            </div>
+            <div style="display:flex; gap:0.2rem; background:var(--panel-2); border:1px solid var(--border); border-radius:999px; padding:0.15rem;">
+                <button type="button" class="flow-mode-btn active" data-mode="value" style="border:none; background:var(--cyan); color:#0a0e1a; font-weight:700; font-size:0.7rem; padding:0.25rem 0.7rem; border-radius:999px; cursor:pointer;">Value</button>
+                <button type="button" class="flow-mode-btn" data-mode="volume" style="border:none; background:transparent; color:var(--muted); font-size:0.7rem; padding:0.25rem 0.7rem; border-radius:999px; cursor:pointer;">Volume</button>
+            </div>
+        </div>
+
+        {{-- Legend chip broker — muncul begitu overlay ON dan data selesai dimuat --}}
+        <div id="flowLegendChips" style="display:none; flex-wrap:wrap; gap:0.5rem; margin-top:0.6rem; align-items:center;"></div>
+
+        {{-- Daftar nama lengkap broker + nilai akumulasi net terakhir (kode, nama, dan nilainya) --}}
+        <div id="flowBrokerNameListWrap" style="margin-top:0.6rem;">
+            <div style="font-size:0.68rem; color:var(--muted); margin-bottom:0.3rem; text-transform:uppercase; letter-spacing:0.03em;">Akumulasi Net (s/d hari terakhir)</div>
+            <div id="flowBrokerNameList" style="display:flex; flex-direction:column; gap:0.25rem;"></div>
+        </div>
+
+        {{-- ══ Tab: Indikator vs Broker Summary (agregat, terpisah dari overlay di atas) ══ --}}
         <div id="indicatorPanels" style="display:none; margin-top:1rem;">
             <div style="display:flex; gap:0.3rem; margin-bottom:0.8rem; border-bottom:1px solid var(--border);">
                 <button type="button" class="btn btn-ghost panel-tab-btn active" data-panel="indicators" style="padding:0.5rem 1rem; font-size:0.78rem; border-radius:6px 6px 0 0; border-bottom:2px solid var(--cyan);">📈 Indikator</button>
@@ -165,10 +190,9 @@
                 </div>
             </div>
 
-            {{-- Panel: Broker Summary --}}
+            {{-- Panel: Broker Summary (tabel agregat top buyer/seller per rentang tanggal) --}}
             <div id="panelBroker" class="tab-panel" style="display:none;">
 
-                {{-- Baris kontrol: rentang tanggal + limit + toggle gross/net --}}
                 <div style="display:flex; flex-wrap:wrap; align-items:end; gap:0.6rem; margin-bottom:0.8rem; padding:0.6rem 0.8rem; background:var(--panel-2); border:1px solid var(--border); border-radius:8px;">
                     <div class="form-group" style="margin:0;">
                         <label style="font-size:0.65rem;">Start Date</label>
@@ -179,7 +203,6 @@
                         <input type="date" id="brokerEndDate" style="font-size:0.78rem; padding:0.3rem 0.5rem;">
                     </div>
 
-                    {{-- Toggle Gross / Net --}}
                     <div style="display:flex; align-items:center; gap:0.4rem; margin-left:auto;">
                         <span id="brokerModeLabelGross" style="font-size:0.72rem; font-weight:700; color:var(--cyan);">Gross</span>
                         <label class="broker-switch">
@@ -223,6 +246,7 @@
             <strong style="color:var(--ink);">Cara baca:</strong>
             <span style="color:#10b981;">🟢 Close turun, Value NR naik</span> → berpotensi akumulasi (bagus, banyak transaksi meski harga ditekan turun).
             <span style="color:#f59e0b;">🟡 Close naik, Value NR turun</span> → hati-hati (kenaikan harga tidak didukung transaksi besar, rawan tidak solid).
+            <br><strong style="color:var(--ink);">Broker Flow Overlay:</strong> garis putus-putus warna-warni = akumulasi net value/volume broker per hari. Klik chip broker di bawah chart untuk sembunyikan/tampilkan garisnya.
         </div>
     </div>
 
@@ -273,7 +297,6 @@
                                 $changeClass = 'text-red';
                             } else {
                                 $changeText = '0 / 0%';
-                                $changeClass = 'text-gray';
                             }
                         }
                         // Nomor urut tetap benar saat pindah halaman
@@ -372,7 +395,7 @@
     tr.active-row td:first-child { border-left: 1px solid rgba(34,211,238,0.35) !important; border-radius: 8px 0 0 8px; }
     tr.active-row td:last-child { border-right: 1px solid rgba(34,211,238,0.35) !important; border-radius: 0 8px 8px 0; }
 
-    /* ══ Broker Summary switch (Gross/Net toggle) ══ */
+    /* ══ Switch toggle (dipakai Broker Flow Overlay & Gross/Net Broker Summary) ══ */
     .broker-switch { position: relative; display: inline-block; width: 38px; height: 20px; }
     .broker-switch input { opacity: 0; width: 0; height: 0; }
     .broker-switch-slider {
@@ -446,11 +469,6 @@
     let stochRsiChartInstance = null;
     let macdChartInstance = null;
 
-    /**
-     * Render 3 panel indikator (RSI, Stochastic RSI, MACD Histogram) di bawah chart utama.
-     * Warna sengaja pakai palet tema (cyan/ungu/amber), BUKAN hijau-merah standar TradingView —
-     * tapi cara baca sinyalnya tetap sama: RSI >70 = overbought, <30 = oversold, dst.
-     */
     function renderIndicators(labels, rsi, stochK, stochD, macdLine, macdSignal, macdHist) {
         Chart.defaults.color = '#94a3b8';
         Chart.defaults.font.family = "'Inter', sans-serif";
@@ -461,7 +479,6 @@
         };
         const commonGrid = { color: 'rgba(148,163,184,0.08)' };
 
-        // ── RSI ──
         if (rsiChartInstance) rsiChartInstance.destroy();
         rsiChartInstance = new Chart(document.getElementById('rsiChart').getContext('2d'), {
             type: 'line',
@@ -515,7 +532,6 @@
             }]
         });
 
-        // ── Stochastic RSI ──
         if (stochRsiChartInstance) stochRsiChartInstance.destroy();
         stochRsiChartInstance = new Chart(document.getElementById('stochRsiChart').getContext('2d'), {
             type: 'line',
@@ -563,7 +579,6 @@
             }]
         });
 
-        // ── MACD (garis MACD, garis Signal, histogram) ──
         if (macdChartInstance) macdChartInstance.destroy();
         const histColors = macdHist.map(v => v === null ? 'transparent' : (v >= 0 ? 'rgba(34,211,238,0.55)' : 'rgba(167,139,250,0.55)'));
         macdChartInstance = new Chart(document.getElementById('macdChart').getContext('2d'), {
@@ -629,7 +644,6 @@
     function selectStock(code) {
         activeStockCode = code;
 
-        // highlight baris aktif
         document.querySelectorAll('.clickable-row').forEach(tr => tr.classList.remove('active-row'));
         document.querySelectorAll(`.clickable-row[data-code="${code}"]`).forEach(tr => tr.classList.add('active-row'));
 
@@ -659,19 +673,24 @@
                     emptyEl.style.display = 'block';
                     document.getElementById('signalBadge').style.display = 'none';
                     document.getElementById('indicatorPanels').style.display = 'none';
+                    document.getElementById('flowLegendChips').style.display = 'none';
                     return;
                 }
+
+                currentChartDates = data.dates || []; // tanggal mentah, dipakai align Broker Flow overlay
 
                 renderClickChart(data.labels, data.values, data.closes);
                 updateSignalBadge(data.values, data.closes);
                 document.getElementById('indicatorPanels').style.display = 'block';
                 renderIndicators(data.labels, data.rsi, data.stoch_k, data.stoch_d, data.macd_line, data.macd_signal, data.macd_hist);
 
-                // Broker Summary di-load kalau tab-nya sedang aktif, atau di-reset flag-nya
-                // supaya ke-load ulang ketika user pindah ke tab Broker (kode saham beda).
                 delete brokerLoadedForCode[code];
                 if (document.getElementById('panelBroker').style.display !== 'none') {
                     loadBrokerSummary(code);
+                }
+
+                if (flowOverlayActive) {
+                    loadBrokerFlowOverlay();
                 }
             })
             .catch(() => {
@@ -682,19 +701,14 @@
             });
     }
 
-    // Ambang batas minimum supaya cuma nangkep SPIKE beneran, bukan selisih tipis/noise.
-    // Value NR wajar naik-turun drastis (bisa berkali lipat), makanya thresholdnya lebih besar dari Close.
-    const SIGNAL_VALUE_PCT_THRESHOLD = 50; // Value NR harus berubah minimal 50%
-    const SIGNAL_CLOSE_PCT_THRESHOLD = 1;  // Close harus berubah minimal 1%
+    const SIGNAL_VALUE_PCT_THRESHOLD = 50;
+    const SIGNAL_CLOSE_PCT_THRESHOLD = 1;
 
     function pctChange(from, to) {
         if (!from || from === 0) return 0;
         return ((to - from) / Math.abs(from)) * 100;
     }
 
-    // Bandingkan arah tren Value NR vs Close Price, lalu tampilkan sinyal.
-    // Pakai rata-rata 20% data awal vs 20% data akhir supaya tidak terpengaruh 1 lonjakan tunggal (noise),
-    // dan cuma dianggap sinyal valid kalau persentase perubahannya melewati threshold di atas.
     function trendPercent(arr) {
         const clean = arr.filter(v => v !== null && !isNaN(v));
         if (clean.length < 2) return 0;
@@ -736,7 +750,6 @@
         }
     }
 
-    // Format angka besar jadi singkat: 1.250.000.000 -> 1,25 M | 850.000.000 -> 850 Jt | dst.
     function formatSingkat(num) {
         const abs = Math.abs(num);
         if (abs >= 1e12) return (num / 1e12).toFixed(2).replace('.', ',') + ' T';
@@ -852,9 +865,9 @@
                             const closePct = pctChange(currentChartCloses[idx - 1], currentChartCloses[idx]);
 
                             if (closePct <= -SIGNAL_CLOSE_PCT_THRESHOLD && valPct >= SIGNAL_VALUE_PCT_THRESHOLD) {
-                                return '#10b981'; // hijau, samain sama badge akumulasi
+                                return '#10b981';
                             } else if (closePct >= SIGNAL_CLOSE_PCT_THRESHOLD && valPct <= -SIGNAL_VALUE_PCT_THRESHOLD) {
-                                return '#f59e0b'; // kuning/amber, samain sama badge hati-hati
+                                return '#f59e0b';
                             }
                             return '#94a3b8';
                         },
@@ -862,6 +875,9 @@
                         padding: 10,
                         callbacks: {
                             label: function(context) {
+                                if (context.dataset.brokerCode) {
+                                    return context.dataset.label + ': ' + formatFlowValue(context.raw);
+                                }
                                 if (context.dataset.yAxisID === 'yClose') {
                                     return 'Close: Rp ' + new Intl.NumberFormat('id-ID').format(context.raw);
                                 }
@@ -886,6 +902,12 @@
                 }
             }
         });
+
+        // Kalau overlay broker flow sedang ON, dataset broker perlu di-attach ulang
+        // ke instance chart yang baru saja di-render ini (chart di-destroy & rebuild tiap ganti saham).
+        if (flowOverlayActive && currentChartDates.length > 0) {
+            loadBrokerFlowOverlay();
+        }
     }
 
     document.querySelectorAll('.tf-btn').forEach(btn => {
@@ -899,9 +921,7 @@
         });
     });
 
-    // ══════════════════════════════════════════════════════════
-    // Tab switcher: Indikator vs Broker Summary
-    // ══════════════════════════════════════════════════════════
+    // ══ Tab switcher: Indikator vs Broker Summary ══
     document.querySelectorAll('.panel-tab-btn').forEach(btn => {
         btn.addEventListener('click', function () {
             document.querySelectorAll('.panel-tab-btn').forEach(b => {
@@ -915,7 +935,6 @@
             document.getElementById('panelIndicators').style.display = target === 'indicators' ? 'block' : 'none';
             document.getElementById('panelBroker').style.display = target === 'broker' ? 'block' : 'none';
 
-            // Broker data baru di-load pertama kali tab-nya dibuka (hemat request)
             if (target === 'broker' && activeStockCode && !brokerLoadedForCode[activeStockCode]) {
                 loadBrokerSummary(activeStockCode);
             }
@@ -923,10 +942,10 @@
     });
 
     // ══════════════════════════════════════════════════════════
-    // Broker Summary panel — konsumsi API cuan.jumari.app/api/broker-summary/{code}
+    // Broker Summary panel (tabel agregat) — konsumsi /broker-summary/{code}
     // ══════════════════════════════════════════════════════════
     let brokerAllDataActive = false;
-    const brokerLoadedForCode = {}; // cache flag: sudah pernah di-load utk kode ini di sesi ini
+    const brokerLoadedForCode = {};
 
     function formatSingkatBroker(num) {
         const abs = Math.abs(num || 0);
@@ -946,8 +965,6 @@
             const buy = lvl.buy;
             const sell = lvl.sell;
 
-            // Gross mode: field standar bval/bvol/sval/svol, avg dihitung manual.
-            // Net mode: field sama namanya tapi isinya net value/volume, avg pakai bavg/savg dari API.
             const buyCode = buy ? buy.broker_code : '-';
             const buyVal = buy ? formatSingkatBroker(buy.bval) : '-';
             const buyLot = buy ? formatSingkatBroker(buy.bvol) : '-';
@@ -991,7 +1008,6 @@
         netLbl.style.color = net ? 'var(--cyan)' : 'var(--muted)';
         netLbl.style.fontWeight = net ? '700' : '400';
 
-        // Kolom Buy = top net buyer, Sell = top net seller kalau mode net aktif
         document.getElementById('brokerColBuyLabel').textContent = net ? 'Buy (Net+)' : 'Buy';
         document.getElementById('brokerColSellLabel').textContent = net ? 'Sell (Net-)' : 'Sell';
     }
@@ -1039,8 +1055,6 @@
                     return;
                 }
 
-                // Isi input tanggal dengan rentang yang benar-benar dipakai backend
-                // (berguna kalau user belum isi tanggal sama sekali -> otomatis terisi default API)
                 if (!startDate && data.broker_start_date) {
                     document.getElementById('brokerStartDate').value = data.broker_start_date;
                 }
@@ -1076,6 +1090,175 @@
         this.style.color = brokerAllDataActive ? '#0a0e1a' : '';
         this.style.borderColor = brokerAllDataActive ? 'var(--cyan)' : '';
         if (activeStockCode) loadBrokerSummary(activeStockCode);
+    });
+
+    // ══════════════════════════════════════════════════════════
+    // Broker Flow Overlay — menyatu di chart Value NR (bukan tab terpisah)
+    // Konsumsi /broker-flow/{code}?dates=...&mode=value|volume
+    // ══════════════════════════════════════════════════════════
+    let flowOverlayActive = false;
+    let flowMode = 'value';
+    let currentChartDates = [];
+    let flowDatasetVisibility = {};
+
+    const FLOW_BROKER_COLORS = ['#a855f7', '#f43f5e', '#f97316', '#eab308', '#22d3ee', '#ec4899', '#84cc16', '#38bdf8'];
+
+    function formatFlowValue(num) {
+        const abs = Math.abs(num || 0);
+        const sign = num < 0 ? '-' : '';
+        if (abs >= 1e9) return sign + (abs / 1e9).toFixed(1) + 'B';
+        if (abs >= 1e6) return sign + (abs / 1e6).toFixed(1) + 'M';
+        if (abs >= 1e3) return sign + (abs / 1e3).toFixed(0) + 'K';
+        return String(num || 0);
+    }
+
+    function renderFlowLegendChips(brokers) {
+        const wrap = document.getElementById('flowLegendChips');
+        const nameListEl = document.getElementById('flowBrokerNameList');
+        wrap.innerHTML = '';
+        nameListEl.innerHTML = '';
+
+        brokers.forEach((b, idx) => {
+            const color = FLOW_BROKER_COLORS[idx % FLOW_BROKER_COLORS.length];
+            if (!(b.broker_code in flowDatasetVisibility)) {
+                flowDatasetVisibility[b.broker_code] = true;
+            }
+
+            // Chip di atas chart — kode broker + titik warna, hover = nama lengkap
+            const chip = document.createElement('div');
+            chip.dataset.code = b.broker_code;
+            chip.title = b.broker_name; // nama lengkap muncul saat hover
+            const active = flowDatasetVisibility[b.broker_code];
+            chip.style.cssText = `display:flex; align-items:center; gap:0.4rem; background:${active ? 'var(--panel-2)' : 'transparent'}; border:1px solid var(--border); border-radius:999px; padding:0.3rem 0.7rem; font-size:0.72rem; font-weight:600; cursor:pointer; opacity:${active ? '1' : '0.4'}; transition:opacity 0.15s;`;
+            chip.innerHTML = `<span style="width:7px; height:7px; border-radius:50%; background:${color}; display:inline-block;"></span> ${b.broker_code}`;
+
+            chip.addEventListener('click', function () {
+                flowDatasetVisibility[b.broker_code] = !flowDatasetVisibility[b.broker_code];
+                const nowActive = flowDatasetVisibility[b.broker_code];
+                this.style.opacity = nowActive ? '1' : '0.4';
+                this.style.background = nowActive ? 'var(--panel-2)' : 'transparent';
+
+                if (clickChartInstance) {
+                    const dsIndex = clickChartInstance.data.datasets.findIndex(d => d.brokerCode === b.broker_code);
+                    if (dsIndex !== -1) {
+                        clickChartInstance.setDatasetVisibility(dsIndex, nowActive);
+                        clickChartInstance.update();
+                    }
+                }
+            });
+
+            wrap.appendChild(chip);
+
+            // Baris keterangan nama lengkap + nilai kumulatif terakhir di bawah chart
+            const latestValue = b.data.length ? b.data[b.data.length - 1] : 0;
+            const valueColor = latestValue >= 0 ? '#10b981' : '#f43f5e';
+            const nameRow = document.createElement('div');
+            nameRow.style.cssText = 'display:flex; align-items:center; justify-content:space-between; gap:0.4rem; font-size:0.7rem; color:var(--muted); padding:0.15rem 0;';
+            nameRow.innerHTML = `
+                <span style="display:flex; align-items:center; gap:0.4rem;">
+                    <span style="width:7px; height:7px; border-radius:50%; background:${color}; display:inline-block; flex-shrink:0;"></span>
+                    <strong style="color:var(--ink);">${b.broker_code}</strong> — ${b.broker_name}
+                </span>
+                <span style="font-family:var(--mono); font-weight:700; color:${valueColor};">${formatFlowValue(latestValue)}</span>
+            `;
+            nameListEl.appendChild(nameRow);
+        });
+    }
+
+    /** Tambah/hapus dataset broker langsung ke chart Value NR yang sudah ada */
+    function applyBrokerOverlayToChart(brokerSeries) {
+        if (!clickChartInstance) return;
+
+        clickChartInstance.data.datasets = clickChartInstance.data.datasets.filter(
+            d => d.brokerCode === undefined
+        );
+
+        if (flowOverlayActive) {
+            if (!clickChartInstance.options.scales.yFlow) {
+                clickChartInstance.options.scales.yFlow = {
+                    position: 'left',
+                    display: false,
+                    grid: { drawOnChartArea: false }
+                };
+            }
+
+            brokerSeries.forEach((b, idx) => {
+                const color = FLOW_BROKER_COLORS[idx % FLOW_BROKER_COLORS.length];
+                clickChartInstance.data.datasets.push({
+                    label: b.broker_code + ' — ' + b.broker_name,
+                    data: b.data,
+                    borderColor: color,
+                    borderWidth: 1.2,
+                    pointRadius: 0,
+                    pointHoverRadius: 3,
+                    tension: 0.2,
+                    spanGaps: true,
+                    yAxisID: 'yFlow',
+                    brokerCode: b.broker_code,
+                    hidden: flowDatasetVisibility[b.broker_code] === false
+                });
+            });
+        }
+
+        clickChartInstance.update();
+    }
+
+    function loadBrokerFlowOverlay() {
+        if (!activeStockCode || currentChartDates.length === 0) return;
+
+        document.getElementById('flowOverlayLoadingTag').style.display = 'inline';
+
+        const params = new URLSearchParams();
+        params.set('mode', flowMode);
+        params.set('dates', currentChartDates.join(','));
+
+        fetch(`/broker-flow/${activeStockCode}?${params.toString()}`, { headers: { 'Accept': 'application/json' } })
+            .then(res => {
+                if (!res.ok) throw new Error('not ok');
+                return res.json();
+            })
+            .then(data => {
+                document.getElementById('flowOverlayLoadingTag').style.display = 'none';
+
+                if (!data.brokers || data.brokers.length === 0) {
+                    document.getElementById('flowLegendChips').style.display = 'none';
+                    return;
+                }
+
+                renderFlowLegendChips(data.brokers);
+                document.getElementById('flowLegendChips').style.display = 'flex';
+                applyBrokerOverlayToChart(data.brokers);
+            })
+            .catch(() => {
+                document.getElementById('flowOverlayLoadingTag').style.display = 'none';
+            });
+    }
+
+    document.getElementById('flowOverlayToggle').addEventListener('change', function () {
+        flowOverlayActive = this.checked;
+
+        if (flowOverlayActive) {
+            loadBrokerFlowOverlay();
+        } else {
+            document.getElementById('flowLegendChips').style.display = 'none';
+            applyBrokerOverlayToChart([]);
+        }
+    });
+
+    document.querySelectorAll('.flow-mode-btn').forEach(btn => {
+        btn.addEventListener('click', function () {
+            document.querySelectorAll('.flow-mode-btn').forEach(b => {
+                b.classList.remove('active');
+                b.style.background = 'transparent';
+                b.style.color = 'var(--muted)';
+            });
+            this.classList.add('active');
+            this.style.background = 'var(--cyan)';
+            this.style.color = '#0a0e1a';
+            flowMode = this.dataset.mode;
+
+            if (flowOverlayActive) loadBrokerFlowOverlay();
+        });
     });
 </script>
 @endpush
