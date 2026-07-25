@@ -155,10 +155,20 @@
         {{-- Legend chip broker — muncul begitu overlay ON dan data selesai dimuat --}}
         <div id="flowLegendChips" style="display:none; flex-wrap:wrap; gap:0.5rem; margin-top:0.6rem; align-items:center;"></div>
 
-        {{-- Daftar nama lengkap broker + nilai akumulasi net terakhir (kode, nama, dan nilainya) --}}
+        {{-- Daftar nama lengkap broker + Buy Avg/Sell Avg + nilai akumulasi net terakhir (bentuk tabel, header di atas) --}}
         <div id="flowBrokerNameListWrap" style="margin-top:0.6rem;">
             <div style="font-size:0.68rem; color:var(--muted); margin-bottom:0.3rem; text-transform:uppercase; letter-spacing:0.03em;">Akumulasi Net (s/d hari terakhir)</div>
-            <div id="flowBrokerNameList" style="display:flex; flex-direction:column; gap:0.25rem;"></div>
+            <table style="width:100%; font-size:0.72rem; border-collapse:collapse;">
+                <thead>
+                    <tr style="color:var(--muted); text-align:right; border-bottom:1px solid var(--border);">
+                        <th style="text-align:left; padding:0.3rem 0.4rem; font-weight:600;">Broker</th>
+                        <th style="padding:0.3rem 0.4rem; font-weight:600;">B.Avg</th>
+                        <th style="padding:0.3rem 0.4rem; font-weight:600;">S.Avg</th>
+                        <th style="padding:0.3rem 0.4rem; font-weight:600;">Net</th>
+                    </tr>
+                </thead>
+                <tbody id="flowBrokerNameList"></tbody>
+            </table>
         </div>
 
         {{-- ══ Tab: Indikator vs Broker Summary (agregat, terpisah dari overlay di atas) ══ --}}
@@ -897,16 +907,6 @@
                                 }
                                 return '#e2e8f0';
                             },
-                            afterLabel: function(context) {
-                                if (!context.dataset.brokerCode) return '';
-                                const idx = context.dataIndex;
-                                const bAvg = context.dataset.buyAvgSeries ? context.dataset.buyAvgSeries[idx] : null;
-                                const sAvg = context.dataset.sellAvgSeries ? context.dataset.sellAvgSeries[idx] : null;
-                                const parts = [];
-                                if (bAvg !== null && bAvg !== undefined) parts.push('  Buy Avg: ' + bAvg.toFixed(2));
-                                if (sAvg !== null && sAvg !== undefined) parts.push('  Sell Avg: ' + sAvg.toFixed(2));
-                                return parts;
-                            },
                             footer: function(items) {
                                 const idx = items[0].dataIndex;
                                 if (idx === 0) return '';
@@ -1173,27 +1173,25 @@
 
             wrap.appendChild(chip);
 
-            // Baris keterangan nama lengkap + Buy Avg / Sell Avg + nilai kumulatif terakhir di bawah chart
+            // Baris tabel: Broker (kode+nama) | B.Avg | S.Avg | Net — header kolomnya sudah ada di <thead>
             const latestValue = b.data.length ? b.data[b.data.length - 1] : 0;
             const valueColor = latestValue >= 0 ? '#10b981' : '#f43f5e';
             const lastIdx = b.buy_avg && b.buy_avg.length ? b.buy_avg.length - 1 : -1;
             const lastBuyAvg = lastIdx >= 0 ? b.buy_avg[lastIdx] : null;
             const lastSellAvg = lastIdx >= 0 ? b.sell_avg[lastIdx] : null;
 
-            const nameRow = document.createElement('div');
-            nameRow.style.cssText = 'display:flex; align-items:center; justify-content:space-between; gap:0.6rem; font-size:0.7rem; color:var(--muted); padding:0.15rem 0;';
-            nameRow.innerHTML = `
-                <span style="display:flex; align-items:center; gap:0.4rem;">
-                    <span style="width:7px; height:7px; border-radius:50%; background:${color}; display:inline-block; flex-shrink:0;"></span>
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = '1px solid var(--border)';
+            tr.innerHTML = `
+                <td style="text-align:left; padding:0.3rem 0.4rem; color:var(--muted);">
+                    <span style="width:7px; height:7px; border-radius:50%; background:${color}; display:inline-block; margin-right:0.4rem;"></span>
                     <strong style="color:var(--ink);">${b.broker_code}</strong> — ${b.broker_name}
-                </span>
-                <span style="display:flex; align-items:center; gap:0.8rem; font-family:var(--mono);">
-                    <span>B.Avg: ${lastBuyAvg !== null && lastBuyAvg !== undefined ? lastBuyAvg.toFixed(2) : '-'}</span>
-                    <span>S.Avg: ${lastSellAvg !== null && lastSellAvg !== undefined ? lastSellAvg.toFixed(2) : '-'}</span>
-                    <span style="font-weight:700; color:${valueColor};">${formatFlowValue(latestValue)}</span>
-                </span>
+                </td>
+                <td style="text-align:right; padding:0.3rem 0.4rem; font-family:var(--mono); color:var(--muted);">${lastBuyAvg !== null && lastBuyAvg !== undefined ? lastBuyAvg.toFixed(2) : '-'}</td>
+                <td style="text-align:right; padding:0.3rem 0.4rem; font-family:var(--mono); color:var(--muted);">${lastSellAvg !== null && lastSellAvg !== undefined ? lastSellAvg.toFixed(2) : '-'}</td>
+                <td style="text-align:right; padding:0.3rem 0.4rem; font-family:var(--mono); font-weight:700; color:${valueColor};">${formatFlowValue(latestValue)}</td>
             `;
-            nameListEl.appendChild(nameRow);
+            nameListEl.appendChild(tr);
         });
     }
 
