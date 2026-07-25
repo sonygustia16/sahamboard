@@ -60,16 +60,19 @@ class StockFilterController extends Controller
         $filterPrevious  = $this->cleanNumber($request->query('previous', ''));
         $filterFrequency = $this->cleanNumber($request->query('frequency', ''));
         $filterValue     = $this->cleanNumber($request->query('value', ''));
+        $filterNonRegularValue = $this->cleanNumber($request->query('non_regular_value', ''));
 
         $opPrevious  = $this->cleanOperator($request->query('op_previous', '='));
         $opFrequency = $this->cleanOperator($request->query('op_frequency', '='));
         $opValue     = $this->cleanOperator($request->query('op_value', '='));
+        $opNonRegularValue = $this->cleanOperator($request->query('op_non_regular_value', '='));
 
         $isSearching = $stockCode != ''
             || ($startDate != '' && $finishDate != '')
             || $filterPrevious != ''
             || $filterFrequency != ''
             || $filterValue != ''
+            || $filterNonRegularValue != ''
             || $screening != '';
 
         $screeningModes = ['akumulasi', 'akumulasi_nrv', 'akumulasi_ketat'];
@@ -103,6 +106,10 @@ class StockFilterController extends Controller
             $query->where('value', $opValue, $filterValue);
         }
 
+        if ($filterNonRegularValue !== '') {
+            $query->where('non_regular_value', $opNonRegularValue, $filterNonRegularValue);
+        }
+
         $query->orderBy('date', 'desc')->orderBy('value', 'desc');
 
         // Jumlah baris per halaman
@@ -125,9 +132,11 @@ class StockFilterController extends Controller
             'filterPrevious'  => $request->query('previous', ''),
             'filterFrequency' => $request->query('frequency', ''),
             'filterValue'     => $request->query('value', ''),
+            'filterNonRegularValue' => $request->query('non_regular_value', ''),
             'opPrevious'      => $opPrevious,
             'opFrequency'     => $opFrequency,
             'opValue'         => $opValue,
+            'opNonRegularValue' => $opNonRegularValue,
             'isSearching'     => $isSearching,
             'savedFilters'    => SavedFilter::orderBy('name')->get(),
             'screening'       => '',
@@ -245,9 +254,11 @@ class StockFilterController extends Controller
             'filterPrevious'   => '',
             'filterFrequency'  => '',
             'filterValue'      => '',
+            'filterNonRegularValue' => '',
             'opPrevious'       => '=',
             'opFrequency'      => '=',
             'opValue'          => '=',
+            'opNonRegularValue' => '=',
             'isSearching'      => true,
             'savedFilters'     => SavedFilter::orderBy('name')->get(),
             'screening'        => $screening,
@@ -316,7 +327,7 @@ class StockFilterController extends Controller
             ->where('stock_code', $stockCode)
             ->where('date', '>=', now()->subDays($warmupDays)->toDateString())
             ->orderBy('date', 'asc')
-            ->get(['date', 'value', 'close']);
+            ->get(['date', 'value', 'close', 'non_regular_value']);
 
         $closesAll = $rows->map(fn ($r) => (float) $r->close)->values()->all();
 
@@ -338,6 +349,7 @@ class StockFilterController extends Controller
             'dates'        => $displayRows->map(fn ($r) => \Illuminate\Support\Carbon::parse($r->date)->format('Y-m-d'))->all(),
             'values'       => $displayRows->map(fn ($r) => (float) $r->value)->all(),
             'closes'       => $displayRows->map(fn ($r) => (float) $r->close)->all(),
+            'non_regular_values' => $displayRows->map(fn ($r) => (float) $r->non_regular_value)->all(),
             'rsi'          => $slice($rsiAll),
             'stoch_k'      => $slice($stochKAll),
             'stoch_d'      => $slice($stochDAll),
