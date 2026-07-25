@@ -13,6 +13,15 @@ class StockFilterController extends Controller
 {
     protected YahooFinanceService $yahoo;
 
+    // ── Threshold screening akumulasi (hasil tuning dari backtest, lihat
+    //    result_backtest1/2/3*.csv). Diletakkan sebagai konstanta biar gampang
+    //    di-tuning tanpa utak-atik query. ──
+    private const AKUMULASI_CLOSE_DROP_MULT = 0.99;      // close turun minimal 1%
+    private const AKUMULASI_VALUE_UP_MULT   = 1.5;       // value/NRV naik minimal 50%
+    private const AKUMULASI_MIN_FREQUENCY   = 50;        // likuiditas dasar
+    private const AKUMULASI_MIN_PRICE       = 51;        // buang saham gocap
+    private const AKUMULASI_MIN_PREV_BASE   = 1_000_000; // hindari pembagi hampir nol
+
     public function __construct(YahooFinanceService $yahoo)
     {
         $this->yahoo = $yahoo;
@@ -27,7 +36,14 @@ class StockFilterController extends Controller
 
     /**
      * Halaman Screening (dulu "Analysis & Chart"): sama persis dengan Filter Lengkap,
-     * tapi mendukung mode screening akumulasi (checkbox "Berpotensi Akumulasi").
+     * tapi mendukung mode screening akumulasi (radio "Berpotensi Akumulasi").
+     *
+     * Ada 3 varian screening (hasil backtest historis, lihat README backtest):
+     * - akumulasi       : Close turun >=1% & Value naik >=50%           (win rate <50%, sinyal banyak ~27rb)
+     * - akumulasi_nrv   : Close turun >=1% & Non-Regular Value naik >=50% (win rate ~48%, sinyal ~3rb)
+     * - akumulasi_ketat : Close turun >=1% & Value naik >=50% & NRV naik >=50% & Foreign Net Buy > 0
+     *                     (win rate ~55%, avg return +10hr +2.38%, tapi sinyal sangat jarang ~300 kejadian
+     *                     dalam 2.5 tahun / 982 saham — paling akurat, cocok untuk swing)
      */
     public function screening(Request $request)
     {
@@ -56,69 +72,12 @@ class StockFilterController extends Controller
             || $filterValue != ''
             || $screening != '';
 
-        if ($screening === 'akumulasi') {
-            // ══ MODE SCREENING: Berpotensi Akumulasi ══
-            // Cari saham yang, dibanding hari transaksi sebelumnya: Close turun TAPI Value NR naik.
-            // Dihitung untuk tanggal terbaru yang ada di database (atau finish_date kalau diisi).
-            $currentDate = !empty($finishDate)
-                ? $finishDate
-                : RingkasanSaham::max('date');
+        $screeningModes = ['akumulasi', 'akumulasi_nrv', 'akumulasi_ketat'];
 
-            $prevDatesSub = RingkasanSaham::query()
-                ->selectRaw('stock_code, MAX(date) as prev_date')
-                ->where('date', '<', $currentDate)
-                ->groupBy('stock_code');
-
-            $query = RingkasanSaham::query()
-                ->from('ringkasan_saham as curr')
-                ->joinSub($prevDatesSub, 'lp', function ($join) {
-                    $join->on('lp.stock_code', '=', 'curr.stock_code');
-                })
-                ->join('ringkasan_saham as prev', function ($join) {
-                    $join->on('prev.stock_code', '=', 'curr.stock_code')
-                         ->on('prev.date', '=', 'lp.prev_date');
-                })
-                ->where('curr.date', $currentDate)
-                // Threshold: Close turun min 1%, Value NR naik min 50%
-                // (bukan cuma turun/naik dikit yang gampang keitung noise/data harian normal)
-                ->whereRaw('curr.close < prev.close * 0.99')
-                ->whereRaw('curr.value > prev.value * 1.5')
-                ->select(
-                    'curr.*',
-                    DB::raw('(prev.close - curr.close) as close_drop'),
-                    DB::raw('(curr.value - prev.value) as value_gain')
-                );
-
-            if (!empty($stockCode)) {
-                $query->where('curr.stock_code', $stockCode);
-            }
-
-            $query->orderByDesc('value_gain');
-
-            $perPage = 25;
-            $rows = $query->paginate($perPage)->withQueryString();
-
-            $stockCodes     = $rows->pluck('stock_code')->all();
-            $livePriceCache = $this->yahoo->getLivePrices($stockCodes, 1);
-
-            return view($viewName, [
-                'rows'            => $rows,
-                'livePriceCache'  => $livePriceCache,
-                'stockCode'       => $stockCode,
-                'startDate'       => $startDate,
-                'finishDate'      => $finishDate,
-                'filterPrevious'  => '',
-                'filterFrequency' => '',
-                'filterValue'     => '',
-                'opPrevious'      => $opPrevious,
-                'opFrequency'     => $opFrequency,
-                'opValue'         => $opValue,
-                'isSearching'     => $isSearching,
-                'savedFilters'    => SavedFilter::orderBy('name')->get(),
-                'screening'       => $screening,
-                'screeningDate'   => $currentDate,
-                'watchlistedCodes' => Watchlist::pluck('stock_code')->map(fn ($c) => strtoupper($c))->all(),
-            ]);
+        if (in_array($screening, $screeningModes, true)) {
+            return $this->handleAkumulasiScreening(
+                $screening, $stockCode, $finishDate, $startDate, $viewName
+            );
         }
 
         // Inisialisasi query (pertahankan logika filter kamu)
@@ -173,6 +132,115 @@ class StockFilterController extends Controller
             'savedFilters'    => SavedFilter::orderBy('name')->get(),
             'screening'       => '',
             'screeningDate'   => null,
+            'watchlistedCodes' => Watchlist::pluck('stock_code')->map(fn ($c) => strtoupper($c))->all(),
+        ]);
+    }
+
+    /**
+     * ── MODE SCREENING: Berpotensi Akumulasi (3 varian) ──
+     * Cari saham yang, dibanding hari transaksi sebelumnya, close turun tapi
+     * indikator akumulasi (Value / NRV / Foreign Net) naik. Dihitung untuk
+     * tanggal terbaru yang ada di database (atau finish_date kalau diisi).
+     */
+    private function handleAkumulasiScreening(
+        string $screening,
+        string $stockCode,
+        string $finishDate,
+        string $startDate,
+        string $viewName
+    ) {
+        $currentDate = !empty($finishDate)
+            ? $finishDate
+            : RingkasanSaham::max('date');
+
+        $prevDatesSub = RingkasanSaham::query()
+            ->selectRaw('stock_code, MAX(date) as prev_date')
+            ->where('date', '<', $currentDate)
+            ->groupBy('stock_code');
+
+        $query = RingkasanSaham::query()
+            ->from('ringkasan_saham as curr')
+            ->joinSub($prevDatesSub, 'lp', function ($join) {
+                $join->on('lp.stock_code', '=', 'curr.stock_code');
+            })
+            ->join('ringkasan_saham as prev', function ($join) {
+                $join->on('prev.stock_code', '=', 'curr.stock_code')
+                     ->on('prev.date', '=', 'lp.prev_date');
+            })
+            ->where('curr.date', $currentDate)
+            // ── Filter noise dasar (terbukti di backtest mengurangi sinyal palsu) ──
+            ->where('curr.frequency', '>=', self::AKUMULASI_MIN_FREQUENCY)
+            ->where('curr.close', '>=', self::AKUMULASI_MIN_PRICE)
+            ->whereRaw('curr.close < prev.close * ?', [self::AKUMULASI_CLOSE_DROP_MULT]);
+
+        switch ($screening) {
+            case 'akumulasi_nrv':
+                // Backtest 2: basis Non-Regular Value
+                $query->where('prev.non_regular_value', '>', self::AKUMULASI_MIN_PREV_BASE)
+                      ->whereRaw('curr.non_regular_value > prev.non_regular_value * ?', [self::AKUMULASI_VALUE_UP_MULT])
+                      ->select(
+                          'curr.*',
+                          DB::raw('(prev.close - curr.close) as close_drop'),
+                          DB::raw('(curr.non_regular_value - prev.non_regular_value) as value_gain')
+                      );
+                break;
+
+            case 'akumulasi_ketat':
+                // Backtest 3c: irisan Value naik + NRV naik + Foreign Net Buy > 0 (paling akurat, paling jarang)
+                $query->where('prev.value', '>', self::AKUMULASI_MIN_PREV_BASE)
+                      ->whereRaw('curr.value > prev.value * ?', [self::AKUMULASI_VALUE_UP_MULT])
+                      ->where('prev.non_regular_value', '>', self::AKUMULASI_MIN_PREV_BASE)
+                      ->whereRaw('curr.non_regular_value > prev.non_regular_value * ?', [self::AKUMULASI_VALUE_UP_MULT])
+                      ->whereRaw('(curr.foreign_buy - curr.foreign_sell) > 0')
+                      ->select(
+                          'curr.*',
+                          DB::raw('(prev.close - curr.close) as close_drop'),
+                          DB::raw('(curr.value - prev.value) as value_gain'),
+                          DB::raw('(curr.foreign_buy - curr.foreign_sell) as foreign_net')
+                      );
+                break;
+
+            case 'akumulasi':
+            default:
+                // Backtest 1 (logika lama): basis Value
+                $query->where('prev.value', '>', self::AKUMULASI_MIN_PREV_BASE)
+                      ->whereRaw('curr.value > prev.value * ?', [self::AKUMULASI_VALUE_UP_MULT])
+                      ->select(
+                          'curr.*',
+                          DB::raw('(prev.close - curr.close) as close_drop'),
+                          DB::raw('(curr.value - prev.value) as value_gain')
+                      );
+                break;
+        }
+
+        if (!empty($stockCode)) {
+            $query->where('curr.stock_code', $stockCode);
+        }
+
+        $query->orderByDesc('value_gain');
+
+        $perPage = 25;
+        $rows = $query->paginate($perPage)->withQueryString();
+
+        $stockCodes     = $rows->pluck('stock_code')->all();
+        $livePriceCache = $this->yahoo->getLivePrices($stockCodes, 1);
+
+        return view($viewName, [
+            'rows'             => $rows,
+            'livePriceCache'   => $livePriceCache,
+            'stockCode'        => $stockCode,
+            'startDate'        => $startDate,
+            'finishDate'       => $finishDate,
+            'filterPrevious'   => '',
+            'filterFrequency'  => '',
+            'filterValue'      => '',
+            'opPrevious'       => '=',
+            'opFrequency'      => '=',
+            'opValue'          => '=',
+            'isSearching'      => true,
+            'savedFilters'     => SavedFilter::orderBy('name')->get(),
+            'screening'        => $screening,
+            'screeningDate'    => $currentDate,
             'watchlistedCodes' => Watchlist::pluck('stock_code')->map(fn ($c) => strtoupper($c))->all(),
         ]);
     }
