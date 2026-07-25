@@ -138,9 +138,18 @@ class StockFilterController extends Controller
 
     /**
      * ── MODE SCREENING: Berpotensi Akumulasi (3 varian) ──
-     * Cari saham yang, dibanding hari transaksi sebelumnya, close turun tapi
-     * indikator akumulasi (Value / NRV / Foreign Net) naik. Dihitung untuk
-     * tanggal terbaru yang ada di database (atau finish_date kalau diisi).
+     * Cari saham yang, dibanding hari transaksi SEBELUMNYA (per baris, bukan
+     * cuma 1 tanggal tetap), close turun tapi indikator akumulasi (Value / NRV /
+     * Foreign Net) naik.
+     *
+     * PERBAIKAN v2: sebelumnya mode ini cuma mengevaluasi SATU tanggal
+     * (finish_date atau tanggal terakhir di DB), jadi kalau finish_date jatuh
+     * di hari libur/weekend (tidak ada data), hasilnya selalu 0 — padahal
+     * user mengharapkan hasil di-scan di SELURUH rentang start_date..finish_date
+     * (mirip backtest historis). Sekarang query pakai window function LAG()
+     * supaya "hari transaksi sebelumnya" dihitung per baris (per stock_code,
+     * per tanggal), lalu di-filter ke rentang tanggal yang dipilih — hasilnya
+     * semua kejadian historis dalam rentang itu, bukan cuma 1 hari.
      */
     private function handleAkumulasiScreening(
         string $screening,
@@ -149,25 +158,34 @@ class StockFilterController extends Controller
         string $startDate,
         string $viewName
     ) {
-        $currentDate = !empty($finishDate)
-            ? $finishDate
-            : RingkasanSaham::max('date');
+        // Default rentang tanggal kalau user tidak isi salah satu/keduanya —
+        // supaya screening tetap jalan scan seluruh histori yang ada di DB.
+        $rangeStart  = !empty($startDate) ? $startDate : (RingkasanSaham::min('date') ?? '1970-01-01');
+        $rangeFinish = !empty($finishDate) ? $finishDate : (RingkasanSaham::max('date') ?? now()->toDateString());
 
-        $prevDatesSub = RingkasanSaham::query()
-            ->selectRaw('stock_code, MAX(date) as prev_date')
-            ->where('date', '<', $currentDate)
-            ->groupBy('stock_code');
+        // Subquery: hitung nilai hari sebelumnya PER BARIS pakai window function,
+        // supaya "prev" itu relatif ke tanggal masing-masing baris (bukan 1 tanggal tetap).
+        $withPrev = "
+            select
+                stock_code,
+                date,
+                previous,
+                frequency,
+                close,
+                value,
+                non_regular_value,
+                foreign_buy,
+                foreign_sell,
+                lag(close) over (partition by stock_code order by date) as prev_close,
+                lag(value) over (partition by stock_code order by date) as prev_value,
+                lag(non_regular_value) over (partition by stock_code order by date) as prev_nrv
+            from ringkasan_saham
+        ";
 
-        $query = RingkasanSaham::query()
-            ->from('ringkasan_saham as curr')
-            ->joinSub($prevDatesSub, 'lp', function ($join) {
-                $join->on('lp.stock_code', '=', 'curr.stock_code');
-            })
-            ->join('ringkasan_saham as prev', function ($join) {
-                $join->on('prev.stock_code', '=', 'curr.stock_code')
-                     ->on('prev.date', '=', 'lp.prev_date');
-            })
-            ->where('curr.date', $currentDate)
+        $query = DB::query()
+            ->fromRaw("({$withPrev}) as curr")
+            ->whereBetween('curr.date', [$rangeStart, $rangeFinish])
+            ->whereNotNull('curr.prev_close')
             // ── Filter noise dasar (terbukti di backtest mengurangi sinyal palsu) ──
             ->where('curr.frequency', '>=', self::AKUMULASI_MIN_FREQUENCY)
             ->where('curr.close', '>=', self::AKUMULASI_MIN_PRICE)
@@ -175,45 +193,32 @@ class StockFilterController extends Controller
             //    karena kolom 'close' di production ternyata masih bertipe BIGINT,
             //    dan Neon storage lagi mepet limit jadi ALTER TABLE tidak dijalankan.
             //    Casting di query ini menghindari error tanpa perlu ubah struktur tabel.
-            ->whereRaw('curr.close < prev.close * ?::numeric', [self::AKUMULASI_CLOSE_DROP_MULT]);
+            ->whereRaw('curr.close < curr.prev_close * ?::numeric', [self::AKUMULASI_CLOSE_DROP_MULT]);
 
         switch ($screening) {
             case 'akumulasi_nrv':
                 // Backtest 2: basis Non-Regular Value
-                $query->where('prev.non_regular_value', '>', self::AKUMULASI_MIN_PREV_BASE)
-                      ->whereRaw('curr.non_regular_value > prev.non_regular_value * ?::numeric', [self::AKUMULASI_VALUE_UP_MULT])
-                      ->select(
-                          'curr.*',
-                          DB::raw('(prev.close - curr.close) as close_drop'),
-                          DB::raw('(curr.non_regular_value - prev.non_regular_value) as value_gain')
-                      );
+                $query->where('curr.prev_nrv', '>', self::AKUMULASI_MIN_PREV_BASE)
+                      ->whereRaw('curr.non_regular_value > curr.prev_nrv * ?::numeric', [self::AKUMULASI_VALUE_UP_MULT])
+                      ->selectRaw('curr.*, (curr.prev_close - curr.close) as close_drop, (curr.non_regular_value - curr.prev_nrv) as value_gain');
                 break;
 
             case 'akumulasi_ketat':
                 // Backtest 3c: irisan Value naik + NRV naik + Foreign Net Buy > 0 (paling akurat, paling jarang)
-                $query->where('prev.value', '>', self::AKUMULASI_MIN_PREV_BASE)
-                      ->whereRaw('curr.value > prev.value * ?::numeric', [self::AKUMULASI_VALUE_UP_MULT])
-                      ->where('prev.non_regular_value', '>', self::AKUMULASI_MIN_PREV_BASE)
-                      ->whereRaw('curr.non_regular_value > prev.non_regular_value * ?::numeric', [self::AKUMULASI_VALUE_UP_MULT])
+                $query->where('curr.prev_value', '>', self::AKUMULASI_MIN_PREV_BASE)
+                      ->whereRaw('curr.value > curr.prev_value * ?::numeric', [self::AKUMULASI_VALUE_UP_MULT])
+                      ->where('curr.prev_nrv', '>', self::AKUMULASI_MIN_PREV_BASE)
+                      ->whereRaw('curr.non_regular_value > curr.prev_nrv * ?::numeric', [self::AKUMULASI_VALUE_UP_MULT])
                       ->whereRaw('(curr.foreign_buy - curr.foreign_sell) > 0')
-                      ->select(
-                          'curr.*',
-                          DB::raw('(prev.close - curr.close) as close_drop'),
-                          DB::raw('(curr.value - prev.value) as value_gain'),
-                          DB::raw('(curr.foreign_buy - curr.foreign_sell) as foreign_net')
-                      );
+                      ->selectRaw('curr.*, (curr.prev_close - curr.close) as close_drop, (curr.value - curr.prev_value) as value_gain, (curr.foreign_buy - curr.foreign_sell) as foreign_net');
                 break;
 
             case 'akumulasi':
             default:
                 // Backtest 1 (logika lama): basis Value
-                $query->where('prev.value', '>', self::AKUMULASI_MIN_PREV_BASE)
-                      ->whereRaw('curr.value > prev.value * ?::numeric', [self::AKUMULASI_VALUE_UP_MULT])
-                      ->select(
-                          'curr.*',
-                          DB::raw('(prev.close - curr.close) as close_drop'),
-                          DB::raw('(curr.value - prev.value) as value_gain')
-                      );
+                $query->where('curr.prev_value', '>', self::AKUMULASI_MIN_PREV_BASE)
+                      ->whereRaw('curr.value > curr.prev_value * ?::numeric', [self::AKUMULASI_VALUE_UP_MULT])
+                      ->selectRaw('curr.*, (curr.prev_close - curr.close) as close_drop, (curr.value - curr.prev_value) as value_gain');
                 break;
         }
 
@@ -221,7 +226,9 @@ class StockFilterController extends Controller
             $query->where('curr.stock_code', $stockCode);
         }
 
-        $query->orderByDesc('value_gain');
+        // Urutkan tanggal terbaru dulu, lalu dalam tanggal yang sama urutkan
+        // berdasarkan besarnya kenaikan indikator akumulasi.
+        $query->orderByDesc('curr.date')->orderByDesc('value_gain');
 
         $perPage = 25;
         $rows = $query->paginate($perPage)->withQueryString();
@@ -244,7 +251,7 @@ class StockFilterController extends Controller
             'isSearching'      => true,
             'savedFilters'     => SavedFilter::orderBy('name')->get(),
             'screening'        => $screening,
-            'screeningDate'    => $currentDate,
+            'screeningDate'    => $rangeStart . ' s/d ' . $rangeFinish,
             'watchlistedCodes' => Watchlist::pluck('stock_code')->map(fn ($c) => strtoupper($c))->all(),
         ]);
     }
