@@ -171,13 +171,17 @@ class StockFilterController extends Controller
             // ── Filter noise dasar (terbukti di backtest mengurangi sinyal palsu) ──
             ->where('curr.frequency', '>=', self::AKUMULASI_MIN_FREQUENCY)
             ->where('curr.close', '>=', self::AKUMULASI_MIN_PRICE)
-            ->whereRaw('curr.close < prev.close * ?', [self::AKUMULASI_CLOSE_DROP_MULT]);
+            // ── cast eksplisit ke ::numeric di parameter (bukan ubah tipe kolom)
+            //    karena kolom 'close' di production ternyata masih bertipe BIGINT,
+            //    dan Neon storage lagi mepet limit jadi ALTER TABLE tidak dijalankan.
+            //    Casting di query ini menghindari error tanpa perlu ubah struktur tabel.
+            ->whereRaw('curr.close < prev.close * ?::numeric', [self::AKUMULASI_CLOSE_DROP_MULT]);
 
         switch ($screening) {
             case 'akumulasi_nrv':
                 // Backtest 2: basis Non-Regular Value
                 $query->where('prev.non_regular_value', '>', self::AKUMULASI_MIN_PREV_BASE)
-                      ->whereRaw('curr.non_regular_value > prev.non_regular_value * ?', [self::AKUMULASI_VALUE_UP_MULT])
+                      ->whereRaw('curr.non_regular_value > prev.non_regular_value * ?::numeric', [self::AKUMULASI_VALUE_UP_MULT])
                       ->select(
                           'curr.*',
                           DB::raw('(prev.close - curr.close) as close_drop'),
@@ -188,9 +192,9 @@ class StockFilterController extends Controller
             case 'akumulasi_ketat':
                 // Backtest 3c: irisan Value naik + NRV naik + Foreign Net Buy > 0 (paling akurat, paling jarang)
                 $query->where('prev.value', '>', self::AKUMULASI_MIN_PREV_BASE)
-                      ->whereRaw('curr.value > prev.value * ?', [self::AKUMULASI_VALUE_UP_MULT])
+                      ->whereRaw('curr.value > prev.value * ?::numeric', [self::AKUMULASI_VALUE_UP_MULT])
                       ->where('prev.non_regular_value', '>', self::AKUMULASI_MIN_PREV_BASE)
-                      ->whereRaw('curr.non_regular_value > prev.non_regular_value * ?', [self::AKUMULASI_VALUE_UP_MULT])
+                      ->whereRaw('curr.non_regular_value > prev.non_regular_value * ?::numeric', [self::AKUMULASI_VALUE_UP_MULT])
                       ->whereRaw('(curr.foreign_buy - curr.foreign_sell) > 0')
                       ->select(
                           'curr.*',
@@ -204,7 +208,7 @@ class StockFilterController extends Controller
             default:
                 // Backtest 1 (logika lama): basis Value
                 $query->where('prev.value', '>', self::AKUMULASI_MIN_PREV_BASE)
-                      ->whereRaw('curr.value > prev.value * ?', [self::AKUMULASI_VALUE_UP_MULT])
+                      ->whereRaw('curr.value > prev.value * ?::numeric', [self::AKUMULASI_VALUE_UP_MULT])
                       ->select(
                           'curr.*',
                           DB::raw('(prev.close - curr.close) as close_drop'),
