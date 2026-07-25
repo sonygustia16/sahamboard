@@ -844,20 +844,20 @@
                     }
                 },
                 plugins: {
-                   legend: {
-    display: true,
-    position: 'top',
-    align: 'end',
-    labels: {
-        color: '#94a3b8',
-        boxWidth: 12,
-        font: { size: 11 },
-        filter: function (legendItem, chartData) {
-            const ds = chartData.datasets[legendItem.datasetIndex];
-            return !ds || !ds.brokerCode; // sembunyikan dataset broker dari legend
-        }
-    }
-},
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        align: 'end',
+                        labels: {
+                            color: '#94a3b8',
+                            boxWidth: 12,
+                            font: { size: 11 },
+                            filter: function (legendItem, chartData) {
+                                const ds = chartData.datasets[legendItem.datasetIndex];
+                                return !ds || !ds.brokerCode; // sembunyikan dataset broker dari legend atas
+                            }
+                        }
+                    },
                     tooltip: {
                         backgroundColor: '#1e293b',
                         borderColor: 'rgba(34,211,238,0.3)',
@@ -882,36 +882,46 @@
                         footerFont: { weight: '600', size: 11 },
                         padding: 10,
                         callbacks: {
-    label: function(context) {
-        if (context.dataset.brokerCode) {
-            return context.dataset.brokerCode + ': ' + formatFlowValue(context.raw);
-        }
-        if (context.dataset.yAxisID === 'yClose') {
-            return 'Close: Rp ' + new Intl.NumberFormat('id-ID').format(context.raw);
-        }
-        return 'Value NR: Rp ' + formatSingkat(context.raw);
-    },
-    labelTextColor: function(context) {
-        if (context.dataset.brokerCode) {
-            return context.raw >= 0 ? '#10b981' : '#f43f5e';
-        }
-        return '#e2e8f0';
-    },
-    footer: function(items) {
-        const idx = items[0].dataIndex;
-        if (idx === 0) return '';
+                            label: function(context) {
+                                if (context.dataset.brokerCode) {
+                                    return context.dataset.brokerCode + ': ' + formatFlowValue(context.raw);
+                                }
+                                if (context.dataset.yAxisID === 'yClose') {
+                                    return 'Close: Rp ' + new Intl.NumberFormat('id-ID').format(context.raw);
+                                }
+                                return 'Value NR: Rp ' + formatSingkat(context.raw);
+                            },
+                            labelTextColor: function(context) {
+                                if (context.dataset.brokerCode) {
+                                    return context.raw >= 0 ? '#10b981' : '#f43f5e';
+                                }
+                                return '#e2e8f0';
+                            },
+                            afterLabel: function(context) {
+                                if (!context.dataset.brokerCode) return '';
+                                const idx = context.dataIndex;
+                                const bAvg = context.dataset.buyAvgSeries ? context.dataset.buyAvgSeries[idx] : null;
+                                const sAvg = context.dataset.sellAvgSeries ? context.dataset.sellAvgSeries[idx] : null;
+                                const parts = [];
+                                if (bAvg !== null && bAvg !== undefined) parts.push('  Buy Avg: ' + bAvg.toFixed(2));
+                                if (sAvg !== null && sAvg !== undefined) parts.push('  Sell Avg: ' + sAvg.toFixed(2));
+                                return parts;
+                            },
+                            footer: function(items) {
+                                const idx = items[0].dataIndex;
+                                if (idx === 0) return '';
 
-        const valPct = pctChange(currentChartValues[idx - 1], currentChartValues[idx]);
-        const closePct = pctChange(currentChartCloses[idx - 1], currentChartCloses[idx]);
+                                const valPct = pctChange(currentChartValues[idx - 1], currentChartValues[idx]);
+                                const closePct = pctChange(currentChartCloses[idx - 1], currentChartCloses[idx]);
 
-        if (closePct <= -SIGNAL_CLOSE_PCT_THRESHOLD && valPct >= SIGNAL_VALUE_PCT_THRESHOLD) {
-            return `🟢 Close turun ${closePct.toFixed(1)}%, Value naik ${valPct.toFixed(0)}% — berpotensi akumulasi`;
-        } else if (closePct >= SIGNAL_CLOSE_PCT_THRESHOLD && valPct <= -SIGNAL_VALUE_PCT_THRESHOLD) {
-            return `🟡 Close naik ${closePct.toFixed(1)}%, Value turun ${Math.abs(valPct).toFixed(0)}% — hati-hati`;
-        }
-        return '';
-    }
-}
+                                if (closePct <= -SIGNAL_CLOSE_PCT_THRESHOLD && valPct >= SIGNAL_VALUE_PCT_THRESHOLD) {
+                                    return `🟢 Close turun ${closePct.toFixed(1)}%, Value naik ${valPct.toFixed(0)}% — berpotensi akumulasi`;
+                                } else if (closePct >= SIGNAL_CLOSE_PCT_THRESHOLD && valPct <= -SIGNAL_VALUE_PCT_THRESHOLD) {
+                                    return `🟡 Close naik ${closePct.toFixed(1)}%, Value turun ${Math.abs(valPct).toFixed(0)}% — hati-hati`;
+                                }
+                                return '';
+                            }
+                        }
                     }
                 }
             }
@@ -1163,17 +1173,25 @@
 
             wrap.appendChild(chip);
 
-            // Baris keterangan nama lengkap + nilai kumulatif terakhir di bawah chart
+            // Baris keterangan nama lengkap + Buy Avg / Sell Avg + nilai kumulatif terakhir di bawah chart
             const latestValue = b.data.length ? b.data[b.data.length - 1] : 0;
             const valueColor = latestValue >= 0 ? '#10b981' : '#f43f5e';
+            const lastIdx = b.buy_avg && b.buy_avg.length ? b.buy_avg.length - 1 : -1;
+            const lastBuyAvg = lastIdx >= 0 ? b.buy_avg[lastIdx] : null;
+            const lastSellAvg = lastIdx >= 0 ? b.sell_avg[lastIdx] : null;
+
             const nameRow = document.createElement('div');
-            nameRow.style.cssText = 'display:flex; align-items:center; justify-content:space-between; gap:0.4rem; font-size:0.7rem; color:var(--muted); padding:0.15rem 0;';
+            nameRow.style.cssText = 'display:flex; align-items:center; justify-content:space-between; gap:0.6rem; font-size:0.7rem; color:var(--muted); padding:0.15rem 0;';
             nameRow.innerHTML = `
                 <span style="display:flex; align-items:center; gap:0.4rem;">
                     <span style="width:7px; height:7px; border-radius:50%; background:${color}; display:inline-block; flex-shrink:0;"></span>
                     <strong style="color:var(--ink);">${b.broker_code}</strong> — ${b.broker_name}
                 </span>
-                <span style="font-family:var(--mono); font-weight:700; color:${valueColor};">${formatFlowValue(latestValue)}</span>
+                <span style="display:flex; align-items:center; gap:0.8rem; font-family:var(--mono);">
+                    <span>B.Avg: ${lastBuyAvg !== null && lastBuyAvg !== undefined ? lastBuyAvg.toFixed(2) : '-'}</span>
+                    <span>S.Avg: ${lastSellAvg !== null && lastSellAvg !== undefined ? lastSellAvg.toFixed(2) : '-'}</span>
+                    <span style="font-weight:700; color:${valueColor};">${formatFlowValue(latestValue)}</span>
+                </span>
             `;
             nameListEl.appendChild(nameRow);
         });
@@ -1209,6 +1227,8 @@
                     spanGaps: true,
                     yAxisID: 'yFlow',
                     brokerCode: b.broker_code,
+                    buyAvgSeries: b.buy_avg,
+                    sellAvgSeries: b.sell_avg,
                     hidden: flowDatasetVisibility[b.broker_code] === false
                 });
             });
