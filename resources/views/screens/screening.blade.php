@@ -78,13 +78,44 @@
                 </div>
             </div>
 
-            {{-- Screening otomatis: cari saham dengan pola Close turun + Value NR naik --}}
-            <div style="margin-top:1rem; padding:0.7rem 0.9rem; background:var(--panel-2); border:1px solid var(--border); border-radius:8px; display:flex; align-items:center; gap:0.6rem;">
-                <input type="checkbox" name="screening" value="akumulasi" id="screeningCheckbox" {{ $screening === 'akumulasi' ? 'checked' : '' }} style="width:16px; height:16px; accent-color: var(--cyan); cursor:pointer;">
-                <label for="screeningCheckbox" style="cursor:pointer; font-size:0.85rem; color:var(--ink); margin:0;">
-                    🔍 <strong>Screening: Berpotensi Akumulasi</strong>
-                    <span style="color:var(--muted); font-size:0.75rem; display:block;">Tampilkan saham yang Close-nya turun tapi Value NR naik dibanding hari transaksi sebelumnya</span>
-                </label>
+            {{-- Screening otomatis: 3 opsi logika akumulasi (hasil backtest historis) --}}
+            <div style="margin-top:1rem; padding:0.9rem 1rem; background:var(--panel-2); border:1px solid var(--border); border-radius:8px;">
+                <div style="font-size:0.85rem; color:var(--ink); font-weight:700; margin-bottom:0.6rem;">
+                    🔍 Screening: Berpotensi Akumulasi
+                </div>
+                <div style="display:flex; flex-direction:column; gap:0.55rem;">
+                    <label style="display:flex; align-items:flex-start; gap:0.55rem; cursor:pointer;">
+                        <input type="radio" name="screening" value="" {{ $screening === '' ? 'checked' : '' }}
+                               style="margin-top:0.2rem; accent-color: var(--cyan); cursor:pointer;">
+                        <span style="font-size:0.8rem; color:var(--muted);">
+                            <strong style="color:var(--ink);">Tidak aktif</strong> — tampilkan hasil filter biasa.
+                        </span>
+                    </label>
+                    <label style="display:flex; align-items:flex-start; gap:0.55rem; cursor:pointer;">
+                        <input type="radio" name="screening" value="akumulasi" {{ $screening === 'akumulasi' ? 'checked' : '' }}
+                               style="margin-top:0.2rem; accent-color: var(--cyan); cursor:pointer;">
+                        <span style="font-size:0.8rem; color:var(--muted);">
+                            <strong style="color:var(--ink);">Value naik</strong> — Close turun ≥1%, Value NR naik ≥50% vs hari sebelumnya.
+                            <span style="display:block; color:#f59e0b; margin-top:0.1rem;">⚠️ Backtest: win rate &lt;50%, sinyal banyak (~27rb/2.5th) — paling sering muncul tapi paling noisy.</span>
+                        </span>
+                    </label>
+                    <label style="display:flex; align-items:flex-start; gap:0.55rem; cursor:pointer;">
+                        <input type="radio" name="screening" value="akumulasi_nrv" {{ $screening === 'akumulasi_nrv' ? 'checked' : '' }}
+                               style="margin-top:0.2rem; accent-color: var(--cyan); cursor:pointer;">
+                        <span style="font-size:0.8rem; color:var(--muted);">
+                            <strong style="color:var(--ink);">Non-Regular Value naik</strong> — Close turun ≥1%, NRV naik ≥50% vs hari sebelumnya.
+                            <span style="display:block; color:#f59e0b; margin-top:0.1rem;">⚠️ Backtest: win rate ~48%, sinyal lebih jarang (~3rb/2.5th).</span>
+                        </span>
+                    </label>
+                    <label style="display:flex; align-items:flex-start; gap:0.55rem; cursor:pointer;">
+                        <input type="radio" name="screening" value="akumulasi_ketat" {{ $screening === 'akumulasi_ketat' ? 'checked' : '' }}
+                               style="margin-top:0.2rem; accent-color: var(--cyan); cursor:pointer;">
+                        <span style="font-size:0.8rem; color:var(--muted);">
+                            <strong style="color:#10b981;">Ketat (Value + NRV + Foreign Net Buy)</strong> — irisan ketiganya + asing net beli hari itu.
+                            <span style="display:block; color:#10b981; margin-top:0.1rem;">✓ Backtest: win rate ~55%, avg return +10hr +2.38%. Paling akurat, tapi sinyal SANGAT jarang (~300/2.5th) — cocok swing, bukan daily.</span>
+                        </span>
+                    </label>
+                </div>
             </div>
 
             <div class="action-row">
@@ -283,6 +314,7 @@
                     <th>Change</th>
                     <th>Frequency</th>
                     <th>Value</th>
+                    <th>Non-Regular Value</th>
                 </tr>
             </thead>
             <tbody>
@@ -331,9 +363,10 @@
                         <td class="text-center {{ $changeClass }}">{{ $changeText }}</td>
                         <td class="text-right">{{ number_format($row->frequency, 0, ',', '.') }}</td>
                         <td class="text-right">{{ number_format($row->value, 0, ',', '.') }}</td>
+                        <td class="text-right">{{ number_format($row->non_regular_value, 0, ',', '.') }}</td>
                     </tr>
                 @empty
-                    <tr class="empty-row"><td colspan="9">Data tidak ditemukan</td></tr>
+                    <tr class="empty-row"><td colspan="10">Data tidak ditemukan</td></tr>
                 @endforelse
             </tbody>
         </table>

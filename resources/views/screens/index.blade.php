@@ -170,6 +170,7 @@
                     <th>Change</th>
                     <th>Frequency</th>
                     <th>Value</th>
+                    <th>Non-Regular Value</th>
                 </tr>
             </thead>
             <tbody>
@@ -219,9 +220,10 @@
                         <td class="text-center {{ $changeClass }}">{{ $changeText }}</td>
                         <td class="text-right">{{ number_format($row->frequency, 0, ',', '.') }}</td>
                         <td class="text-right">{{ number_format($row->value, 0, ',', '.') }}</td>
+                        <td class="text-right">{{ number_format($row->non_regular_value, 0, ',', '.') }}</td>
                     </tr>
                 @empty
-                    <tr class="empty-row"><td colspan="9">Data tidak ditemukan</td></tr>
+                    <tr class="empty-row"><td colspan="10">Data tidak ditemukan</td></tr>
                 @endforelse
             </tbody>
         </table>
