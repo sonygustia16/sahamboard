@@ -10,7 +10,12 @@
 @section('content')
 
     <div class="glass-card">
-        <h3><span class="accent-bar"></span>Kriteria Pencarian</h3>
+        <h3 id="kriteriaPencarianToggle" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between; user-select:none;" onclick="toggleKriteriaPencarian()">
+            <span><span class="accent-bar"></span>Kriteria Pencarian</span>
+            <span id="kriteriaPencarianChevron" style="font-size:0.75rem; color:var(--muted); transition:transform 0.2s;">▼</span>
+        </h3>
+
+        <div id="kriteriaPencarianBody">
 
         {{-- Preset filter tersimpan — klik untuk langsung isi & jalankan filter --}}
         @if($savedFilters->count() > 0)
@@ -76,6 +81,17 @@
                         <input type="text" class="rupiah-input" name="value" value="{{ $filterValue }}">
                     </div>
                 </div>
+                <div class="form-group">
+                    <label>Non-Regular Value</label>
+                    <div class="input-group">
+                        <select name="op_non_regular_value">
+                            <option value="=" @selected($opNonRegularValue == '=')>=</option>
+                            <option value=">" @selected($opNonRegularValue == '>')>&gt;</option>
+                            <option value="<" @selected($opNonRegularValue == '<')>&lt;</option>
+                        </select>
+                        <input type="text" class="rupiah-input" name="non_regular_value" value="{{ $filterNonRegularValue }}">
+                    </div>
+                </div>
             </div>
 
             {{-- Screening otomatis: 3 opsi logika akumulasi (hasil backtest historis) --}}
@@ -124,6 +140,7 @@
                 <button type="button" class="btn btn-ghost" onclick="openSavePresetPrompt()">💾 Simpan sebagai Preset</button>
             </div>
         </form>
+        </div>
     </div>
 
     {{-- Form tersembunyi buat submit preset baru --}}
@@ -423,6 +440,21 @@
 
 @push('body-scripts')
 <style>
+    #kriteriaPencarianBody {
+        overflow: hidden;
+        max-height: 2000px;
+        transition: max-height 0.3s ease, opacity 0.2s ease, margin-top 0.2s ease;
+        opacity: 1;
+        margin-top: 1rem;
+    }
+    #kriteriaPencarianBody.collapsed {
+        max-height: 0;
+        opacity: 0;
+        margin-top: 0;
+    }
+    #kriteriaPencarianChevron.collapsed {
+        transform: rotate(-90deg);
+    }
     .tf-btn.active { background: var(--cyan); color: #0a0e1a; border-color: var(--cyan); }
     .star-btn {
         background: none; border: none; cursor: pointer; font-size: 1.2rem; line-height: 1;
@@ -455,6 +487,33 @@
     .broker-switch input:checked + .broker-switch-slider:before { transform: translateX(18px); background: var(--cyan); }
 </style>
 <script>
+    // ══ Toggle collapse Kriteria Pencarian (hemat layar) ══
+    function toggleKriteriaPencarian() {
+        const body = document.getElementById('kriteriaPencarianBody');
+        const chevron = document.getElementById('kriteriaPencarianChevron');
+        const collapsed = body.classList.toggle('collapsed');
+        chevron.classList.toggle('collapsed', collapsed);
+        try {
+            localStorage.setItem('sahamboard_kriteria_collapsed', collapsed ? '1' : '0');
+        } catch (e) { /* localStorage tidak tersedia, abaikan */ }
+    }
+
+    // Auto-collapse kalau sebelumnya user pernah collapse, ATAU kalau sudah
+    // ada hasil pencarian aktif (biar layar hemat begitu hasil muncul).
+    (function initKriteriaPencarianState() {
+        const isSearchingNow = {{ $isSearching ? 'true' : 'false' }};
+        let shouldCollapse = isSearchingNow;
+        try {
+            const saved = localStorage.getItem('sahamboard_kriteria_collapsed');
+            if (saved !== null) shouldCollapse = saved === '1';
+        } catch (e) { /* abaikan */ }
+
+        if (shouldCollapse) {
+            document.getElementById('kriteriaPencarianBody').classList.add('collapsed');
+            document.getElementById('kriteriaPencarianChevron').classList.add('collapsed');
+        }
+    })();
+
     // Data preset dari server (untuk applyPreset)
     const SAVED_FILTERS = {!! $savedFilters->map(fn($p) => [
         'id' => $p->id,
@@ -722,7 +781,7 @@
 
                 currentChartDates = data.dates || []; // tanggal mentah, dipakai align Broker Flow overlay
 
-                renderClickChart(data.labels, data.values, data.closes);
+                renderClickChart(data.labels, data.values, data.closes, data.non_regular_values);
                 updateSignalBadge(data.values, data.closes);
                 document.getElementById('indicatorPanels').style.display = 'block';
                 renderIndicators(data.labels, data.rsi, data.stoch_k, data.stoch_d, data.macd_line, data.macd_signal, data.macd_hist);
@@ -804,10 +863,12 @@
 
     let currentChartValues = [];
     let currentChartCloses = [];
+    let currentChartNrv = [];
 
-    function renderClickChart(labels, values, closes) {
+    function renderClickChart(labels, values, closes, nrvValues) {
         currentChartValues = values;
         currentChartCloses = closes;
+        currentChartNrv = nrvValues || [];
         const ctx = document.getElementById('clickChart').getContext('2d');
 
         if (clickChartInstance) {
@@ -856,6 +917,21 @@
                         fill: false,
                         tension: 0.4,
                         yAxisID: 'yClose'
+                    },
+                    {
+                        label: 'Non-Regular Value',
+                        data: currentChartNrv,
+                        borderColor: '#10b981',
+                        borderWidth: 2,
+                        borderDash: [2, 2],
+                        pointRadius: 0,
+                        pointHoverRadius: 5,
+                        pointHoverBackgroundColor: '#10b981',
+                        pointHoverBorderColor: '#fff',
+                        pointHoverBorderWidth: 2,
+                        fill: false,
+                        tension: 0.4,
+                        yAxisID: 'yValue'
                     }
                 ]
             },
@@ -931,6 +1007,9 @@
                                 }
                                 if (context.dataset.yAxisID === 'yClose') {
                                     return 'Close: Rp ' + new Intl.NumberFormat('id-ID').format(context.raw);
+                                }
+                                if (context.dataset.label === 'Non-Regular Value') {
+                                    return 'Non-Regular Value: Rp ' + formatSingkat(context.raw);
                                 }
                                 return 'Value NR: Rp ' + formatSingkat(context.raw);
                             },
