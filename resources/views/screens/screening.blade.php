@@ -1404,5 +1404,18 @@
             if (flowOverlayActive) loadBrokerFlowOverlay();
         });
     });
+
+    // ══ Auto-select & "standby" chart kalau halaman ini dibuka dari link
+    //    stock code di Watchlist (?stock_code=XXX). Chart langsung terbuka
+    //    dan ter-load tanpa perlu klik baris tabel lagi. ══
+    @if(!empty($stockCode))
+        (function autoSelectFromWatchlist() {
+            const targetCode = '{{ strtoupper($stockCode) }}';
+            const row = document.querySelector(`.clickable-row[data-code="${targetCode}"]`);
+            if (row) {
+                selectStock(targetCode);
+            }
+        })();
+    @endif
 </script>
 @endpush

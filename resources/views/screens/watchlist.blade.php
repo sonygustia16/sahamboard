@@ -99,7 +99,15 @@
                     >
                         <td class="text-center"><strong>{{ $loop->iteration }}</strong></td>
                         <td>{{ $dateFormatted }}</td>
-                        <td><span class="code-pill">{{ $code }}</span></td>
+                        <td>
+                            <a href="{{ route('screening.index', ['stock_code' => $code]) }}"
+                               class="code-pill"
+                               style="text-decoration:none; cursor:pointer;"
+                               onclick="event.stopPropagation();"
+                               title="Buka {{ $code }} di halaman Screening">
+                                {{ $code }}
+                            </a>
+                        </td>
                         <td class="text-right live-cell">{!! $formattedLive !!}</td>
                         <td class="text-right">{{ number_format($entryPrice, 0, ',', '.') }}</td>
                         <td class="text-center {{ $changeClass }}">{{ $changeText }}</td>
