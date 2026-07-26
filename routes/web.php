@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
-| Web Routes — SahamBoard (versi lengkap, 6 fitur, dengan persistence)
+| Web Routes — SahamBoard (versi lengkap: 6 fitur + Broker Summary + Fibonacci)
 |--------------------------------------------------------------------------
 */
 
@@ -29,16 +29,16 @@ Route::middleware(EnsureAuthenticated::class)->group(function () {
     // Rate limit lebih longgar untuk halaman yang manggil Yahoo Finance API / Broker Summary API,
     // supaya tidak gampang disalahgunakan untuk hammer request ke server eksternal.
     Route::middleware('throttle:60,1')->group(function () {
-    Route::get('/', [StockFilterController::class, 'index'])->name('index');
-    Route::get('/screening', [StockFilterController::class, 'screening'])->name('screening.index');
-    Route::get('/chart-data/{stockCode}', [StockFilterController::class, 'chartData'])->name('chart-data');
-    Route::get('/analysis', [StockAnalysisController::class, 'index'])->name('analysis.index');
-    Route::get('/watchlist', [WatchlistController::class, 'index'])->name('watchlist.index');
+        Route::get('/', [StockFilterController::class, 'index'])->name('index');
+        Route::get('/screening', [StockFilterController::class, 'screening'])->name('screening.index');
+        Route::get('/chart-data/{stockCode}', [StockFilterController::class, 'chartData'])->name('chart-data');
+        Route::get('/analysis', [StockAnalysisController::class, 'index'])->name('analysis.index');
+        Route::get('/watchlist', [WatchlistController::class, 'index'])->name('watchlist.index');
 
-    // Broker Summary & Broker Flow Overlay — dipanggil via fetch() dari screening.blade.php
-    Route::get('/broker-summary/{stockCode}', [BrokerSummaryController::class, 'show'])->name('broker-summary.show');
-    Route::get('/broker-flow/{stockCode}', [BrokerSummaryController::class, 'flow'])->name('broker-flow.show');
-});
+        // Broker Summary & Broker Flow Overlay — dipanggil via fetch() dari screening.blade.php
+        Route::get('/broker-summary/{stockCode}', [BrokerSummaryController::class, 'show'])->name('broker-summary.show');
+        Route::get('/broker-flow/{stockCode}', [BrokerSummaryController::class, 'flow'])->name('broker-flow.show');
+    });
 
     Route::post('/filter-preset', [StockFilterController::class, 'storePreset'])->name('filter-preset.store');
     Route::delete('/filter-preset/{savedFilter}', [StockFilterController::class, 'destroyPreset'])->name('filter-preset.destroy');
@@ -55,6 +55,7 @@ Route::middleware(EnsureAuthenticated::class)->group(function () {
     Route::delete('/money-management/holding/{holding}', [MoneyManagementController::class, 'destroyHolding'])->name('money-management.holding.destroy');
 
     Route::get('/watchlist/alerts-check', [WatchlistController::class, 'alertsCheck'])->name('watchlist.alerts-check');
+    Route::get('/watchlist/{watchlist}/fibonacci', [WatchlistController::class, 'fibonacci'])->name('watchlist.fibonacci');
     Route::patch('/watchlist/{watchlist}/detail', [WatchlistController::class, 'updateDetail'])->name('watchlist.update-detail');
     Route::post('/watchlist/quick-toggle', [WatchlistController::class, 'quickToggle'])->name('watchlist.quick-toggle');
     Route::post('/watchlist', [WatchlistController::class, 'store'])->name('watchlist.store');
