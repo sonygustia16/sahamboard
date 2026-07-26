@@ -22,6 +22,18 @@ class BrokerSummaryService
     }
 
     /**
+     * Header otentikasi sesuai dokumentasi resmi provider (stock.arjum.com):
+     * pakai header custom "X-API-Key", BUKAN "Authorization: Bearer".
+     */
+    protected function authHeaders(): array
+    {
+        return [
+            'X-API-Key' => $this->apiKey,
+            'Accept'    => 'application/json',
+        ];
+    }
+
+    /**
      * Ambil ringkasan broker (buy/sell/netflow) untuk 1 kode saham.
      *
      * @param string $stockCode
@@ -47,7 +59,7 @@ class BrokerSummaryService
         }
 
         try {
-            $response = Http::withToken($this->apiKey)
+            $response = Http::withHeaders($this->authHeaders())
                 ->timeout(15)
                 ->get("{$this->baseUrl}/{$stockCode}", $params);
 
@@ -68,11 +80,6 @@ class BrokerSummaryService
 
     /**
      * Ambil data broker flow (dipakai untuk overlay garis broker di chart Value NR).
-     *
-     * ASUMSI SEMENTARA: endpoint flow ada di domain yang sama, path "/broker-flow/{code}",
-     * menerima query "dates" (comma-separated YYYY-MM-DD) dan "mode" (value|volume).
-     * Kalau ternyata endpoint asli beda struktur, method ini yang perlu disesuaikan —
-     * BrokerSummaryController tidak perlu diubah karena cukup manggil method ini.
      *
      * @param string $stockCode
      * @param array $dates array tanggal YYYY-MM-DD yang mau diambil datanya
@@ -98,7 +105,7 @@ class BrokerSummaryService
         ];
 
         try {
-            $response = Http::withToken($this->apiKey)
+            $response = Http::withHeaders($this->authHeaders())
                 ->timeout(15)
                 ->get("{$this->flowBaseUrl}/{$stockCode}", $params);
 
