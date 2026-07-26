@@ -103,7 +103,7 @@
                         <td class="text-right live-cell">{!! $formattedLive !!}</td>
                         <td class="text-right">{{ number_format($entryPrice, 0, ',', '.') }}</td>
                         <td class="text-center {{ $changeClass }}">{{ $changeText }}</td>
-                        <td class="text-right {{ $gapClass }}">{{ $clFormatted }} <span style="font-size:0.72em; opacity:0.8;">({{ $gapText }})</span></td>
+                        <td class="text-right"><strong style="color:var(--loss);">{{ $clFormatted }}</strong></td>
                         <td class="text-center" onclick="event.stopPropagation();">
                             <button type="button" class="icon-btn" title="Edit" onclick="openDetailModal({{ $row->id }})">✏️</button>
                             <button type="button" class="icon-btn" title="Hapus" onclick="openDeleteConfirm({{ $row->id }}, '{{ $code }}')">🗑️</button>
@@ -213,6 +213,25 @@
                     <div class="avg-field"></div>
                 </div>
 
+                {{-- ══ Fibonacci Retracement (dihitung on-demand, kecil/compact) ══ --}}
+                <div id="fiboSection" style="margin-top:0.7rem; padding:0.5rem 0.7rem; background:var(--panel-2); border:1px solid var(--border); border-radius:8px;">
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.35rem;">
+                        <span style="font-size:0.68rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.03em;">📐 Fibonacci Retracement</span>
+                        <span id="fiboMeta" style="font-size:0.62rem; color:var(--muted);"></span>
+                    </div>
+                    <div id="fiboLoading" style="font-size:0.7rem; color:var(--muted);">Menghitung...</div>
+                    <div id="fiboError" style="display:none; font-size:0.7rem; color:var(--muted);"></div>
+                    <div id="fiboGrid" style="display:none; grid-template-columns: repeat(7, 1fr); gap:0.3rem; text-align:center;">
+                        <div><div style="font-size:0.6rem; color:var(--muted);">High</div><div id="fiboHigh" style="font-size:0.7rem; font-weight:700; color:#10b981;">-</div></div>
+                        <div><div style="font-size:0.6rem; color:var(--muted);">78.6%</div><div id="fibo786" style="font-size:0.7rem; font-weight:600;">-</div></div>
+                        <div><div style="font-size:0.6rem; color:var(--muted);">61.8%</div><div id="fibo618" style="font-size:0.7rem; font-weight:600;">-</div></div>
+                        <div><div style="font-size:0.6rem; color:var(--muted);">50%</div><div id="fibo500" style="font-size:0.7rem; font-weight:600;">-</div></div>
+                        <div><div style="font-size:0.6rem; color:var(--muted);">38.2%</div><div id="fibo382" style="font-size:0.7rem; font-weight:600;">-</div></div>
+                        <div><div style="font-size:0.6rem; color:var(--muted);">23.6%</div><div id="fibo236" style="font-size:0.7rem; font-weight:600;">-</div></div>
+                        <div><div style="font-size:0.6rem; color:var(--muted);">Low</div><div id="fiboLow" style="font-size:0.7rem; font-weight:700; color:#f43f5e;">-</div></div>
+                    </div>
+                </div>
+
                 <div class="avg-field" style="margin-top:0.8rem;">
                     <label>Alasan / Keterangan</label>
                     <textarea id="detailNote" class="avg-input" rows="2" placeholder="Kenapa saham ini masuk watchlist..."></textarea>
@@ -278,6 +297,8 @@
 
     .avg-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.7rem; }
     @media (max-width: 640px) { .avg-grid { grid-template-columns: repeat(2, 1fr); } }
+    #fiboGrid { grid-template-columns: repeat(7, 1fr); }
+    @media (max-width: 640px) { #fiboGrid { grid-template-columns: repeat(4, 1fr); row-gap: 0.5rem; } }
     .avg-field label { display:block; font-size:0.68rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.03em; margin-bottom:0.25rem; font-weight:600; }
     .avg-field input, .avg-field textarea {
         width:100%; box-sizing:border-box; background: var(--bg); border:1px solid var(--border); border-radius:6px;
@@ -371,6 +392,51 @@
         document.getElementById('detailFeeJual').oninput = recalc;
 
         document.getElementById('detailModalOverlay').style.display = 'flex';
+
+        loadFibonacci(id);
+    }
+
+    /**
+     * Fetch swing high/low + level Fibonacci Retracement on-demand
+     * (dihitung server-side, lihat WatchlistController@fibonacci).
+     */
+    function loadFibonacci(id) {
+        const loadingEl = document.getElementById('fiboLoading');
+        const errorEl = document.getElementById('fiboError');
+        const gridEl = document.getElementById('fiboGrid');
+        const metaEl = document.getElementById('fiboMeta');
+
+        loadingEl.style.display = 'block';
+        errorEl.style.display = 'none';
+        gridEl.style.display = 'none';
+        metaEl.textContent = '';
+
+        fetch(`/watchlist/${id}/fibonacci`, { headers: { 'Accept': 'application/json' } })
+            .then(res => res.json())
+            .then(data => {
+                loadingEl.style.display = 'none';
+
+                if (!data.success) {
+                    errorEl.textContent = data.message || 'Gagal menghitung Fibonacci untuk saham ini.';
+                    errorEl.style.display = 'block';
+                    return;
+                }
+
+                document.getElementById('fiboHigh').textContent = fmt(data.swing_high);
+                document.getElementById('fibo786').textContent = fmt(data.levels['78.6']);
+                document.getElementById('fibo618').textContent = fmt(data.levels['61.8']);
+                document.getElementById('fibo500').textContent = fmt(data.levels['50.0']);
+                document.getElementById('fibo382').textContent = fmt(data.levels['38.2']);
+                document.getElementById('fibo236').textContent = fmt(data.levels['23.6']);
+                document.getElementById('fiboLow').textContent = fmt(data.swing_low);
+                metaEl.textContent = `${data.swing_low_date} → ${data.swing_high_date}`;
+                gridEl.style.display = 'grid';
+            })
+            .catch(() => {
+                loadingEl.style.display = 'none';
+                errorEl.textContent = 'Gagal memuat (offline?)';
+                errorEl.style.display = 'block';
+            });
     }
 
     function closeDetailModal(evt) {
