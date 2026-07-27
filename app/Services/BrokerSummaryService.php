@@ -79,13 +79,22 @@ class BrokerSummaryService
     /**
      * Broker Flow Overlay (dipakai untuk overlay garis broker di chart Value NR).
      *
-     * PENTING: Provider (stock.arjum.com) TIDAK menyediakan endpoint khusus "broker-flow" —
-     * hanya 8 endpoint resmi yang salah satunya "broker-summary". Jadi data flow di sini
-     * DIHITUNG SENDIRI dengan memanggil broker-summary untuk SETIAP tanggal yang diminta
-     * (start_date = end_date = tanggal tsb), lalu digabung jadi deret waktu per broker.
+     * Provider (stock.arjum.com) TIDAK menyediakan endpoint khusus "broker-flow" —
+     * hanya 8 endpoint resmi, salah satunya "broker-summary". Jadi flow di sini
+     * dibangun dari broker-summary dengan 2 tahap:
      *
-     * Supaya tidak lambat (N tanggal = N request berurutan), semua request dijalankan
-     * PARALEL lewat Http::pool().
+     *  1) TOP-N BROKER: satu kali panggilan broker-summary dengan start_date/end_date
+     *     MENCAKUP SELURUH rentang tanggal yang diminta (all_data=true). Ini yang
+     *     bikin daftar broker beneran DINAMIS mengikuti timeframe yang dipilih user
+     *     (1M/3M/6M/1Y) — bukan selalu berdasar beberapa hari terakhir saja.
+     *
+     *  2) DERET WAKTU: untuk menggambar garis overlay per hari, idealnya perlu data
+     *     harian sepanjang periode. Supaya tidak generate ratusan request paralel
+     *     untuk rentang panjang (mis. 1Y ~250 hari bursa), tanggal di-DOWNSAMPLE
+     *     MERATA (ambil sampel titik menyebar dari awal s/d akhir periode) —
+     *     BUKAN dipotong ke beberapa hari terakhir saja. Titik yang tidak ikut
+     *     ter-sample diisi null; dataset overlay di frontend sudah pakai
+     *     spanGaps:true jadi garis tetap tersambung mulus.
      *
      * @param string $stockCode
      * @param array $dates array tanggal YYYY-MM-DD (urut sesuai sumbu-X chart)
@@ -106,12 +115,46 @@ class BrokerSummaryService
             return ['brokers' => []];
         }
 
-        // Batasi maksimal 60 tanggal terakhir, biar tidak generate ratusan request
-        // paralel sekaligus kalau user pilih rentang timeframe yang sangat panjang (mis. 1Y).
-        $dates = array_slice($dates, -60);
+        sort($dates); // pastikan urut ascending sebelum ambil first/last
+        $firstDate = $dates[0];
+        $lastDate  = end($dates);
+
+        // ── TAHAP 1: Top-N broker paling aktif SEPANJANG PERIODE PENUH ──
+        $aggregate = $this->getBrokerSummary($stockCode, [
+            'start_date' => $firstDate,
+            'end_date'   => $lastDate,
+            'all_data'   => true,
+        ]);
+
+        if ($aggregate === null || empty($aggregate['brokers'])) {
+            Log::warning("BrokerSummaryService::getBrokerFlow tidak ada data agregat untuk {$stockCode} ({$firstDate} s/d {$lastDate})");
+            return null;
+        }
+
+        $sortKey = $mode === 'volume' ? 'nvol' : 'nval';
+
+        $sortedBrokers = $aggregate['brokers'];
+        usort($sortedBrokers, fn ($a, $b) => abs($b[$sortKey] ?? 0) <=> abs($a[$sortKey] ?? 0));
+        $topBrokers = array_slice($sortedBrokers, 0, $topN);
+
+        $topCodes = [];
+        $brokerMeta = [];
+        foreach ($topBrokers as $b) {
+            if (empty($b['broker_code'])) continue;
+            $topCodes[] = $b['broker_code'];
+            $brokerMeta[$b['broker_code']] = $b['broker_name'] ?? $b['broker_code'];
+        }
+
+        if (empty($topCodes)) {
+            return ['brokers' => []];
+        }
+
+        // ── TAHAP 2: Deret waktu harian untuk broker-broker top itu, di-downsample
+        //    supaya mencakup SELURUH periode tanpa request meledak ──
+        $sampledDates = $this->downsampleDates($dates, 90);
 
         try {
-            $responses = Http::pool(fn ($pool) => collect($dates)->map(
+            $responses = Http::pool(fn ($pool) => collect($sampledDates)->map(
                 fn ($date) => $pool->as($date)
                     ->withHeaders($this->authHeaders())
                     ->timeout(15)
@@ -126,13 +169,12 @@ class BrokerSummaryService
             return null;
         }
 
-        $brokerMeta      = []; // broker_code => broker_name
         $seriesByBroker  = []; // broker_code => [date => net value/volume]
         $buyAvgByBroker  = []; // broker_code => [date => buy avg price]
         $sellAvgByBroker = []; // broker_code => [date => sell avg price]
         $anySuccess      = false;
 
-        foreach ($dates as $date) {
+        foreach ($sampledDates as $date) {
             $response = $responses[$date] ?? null;
 
             if (!$response || $response->failed()) {
@@ -146,14 +188,11 @@ class BrokerSummaryService
             }
 
             $anySuccess = true;
-            $json = $response->json();
-            $brokers = $json['brokers'] ?? [];
+            $brokers = $response->json('brokers') ?? [];
 
             foreach ($brokers as $b) {
                 $code = $b['broker_code'] ?? null;
-                if (!$code) continue;
-
-                $brokerMeta[$code] = $b['broker_name'] ?? $code;
+                if (!$code || !in_array($code, $topCodes, true)) continue;
 
                 $value = $mode === 'volume' ? ($b['nvol'] ?? 0) : ($b['nval'] ?? 0);
                 $seriesByBroker[$code][$date] = $value;
@@ -165,20 +204,13 @@ class BrokerSummaryService
             }
         }
 
-        // Kalau SEMUA tanggal gagal fetch, anggap gagal total (biar controller balas 502,
-        // bukan overlay kosong yang terlihat seperti "berhasil tapi tidak ada broker").
         if (!$anySuccess) {
             return null;
         }
 
-        // Tentukan top-N broker paling aktif sepanjang periode (berdasar total |net value|)
-        $totals = [];
-        foreach ($seriesByBroker as $code => $byDate) {
-            $totals[$code] = array_sum(array_map('abs', $byDate));
-        }
-        arsort($totals);
-        $topCodes = array_slice(array_keys($totals), 0, $topN);
-
+        // Kembalikan data untuk SEMUA tanggal asli ($dates), supaya jumlah titik
+        // selaras dengan sumbu-X chart utama. Tanggal yang tidak ikut ter-sample
+        // otomatis null (spanGaps:true di frontend bikin garis tetap mulus).
         $result = [];
         foreach ($topCodes as $code) {
             $data = [];
@@ -201,5 +233,32 @@ class BrokerSummaryService
         }
 
         return ['brokers' => $result];
+    }
+
+    /**
+     * Ambil sampel tanggal menyebar merata dari awal sampai akhir array,
+     * maksimal $maxPoints titik. Kalau jumlah tanggal <= $maxPoints,
+     * kembalikan apa adanya (tidak perlu di-downsample).
+     */
+    private function downsampleDates(array $dates, int $maxPoints): array
+    {
+        $count = count($dates);
+
+        if ($count <= $maxPoints) {
+            return $dates;
+        }
+
+        $step = $count / $maxPoints;
+        $sampled = [];
+
+        for ($i = 0; $i < $maxPoints; $i++) {
+            $idx = min((int) round($i * $step), $count - 1);
+            $sampled[$dates[$idx]] = $dates[$idx]; // pakai key untuk dedupe otomatis
+        }
+
+        // Pastikan tanggal paling akhir selalu ikut, biar overlay "nyampe" ke hari ini
+        $sampled[$dates[$count - 1]] = $dates[$count - 1];
+
+        return array_values($sampled);
     }
 }
