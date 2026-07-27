@@ -1240,12 +1240,13 @@
     const FLOW_BROKER_COLORS = ['#a855f7', '#f43f5e', '#f97316', '#eab308', '#22d3ee', '#ec4899', '#84cc16', '#38bdf8'];
 
     function formatFlowValue(num) {
-        const abs = Math.abs(num || 0);
+        if (num === null || num === undefined) return '-';
+        const abs = Math.abs(num);
         const sign = num < 0 ? '-' : '';
         if (abs >= 1e9) return sign + (abs / 1e9).toFixed(1) + 'B';
         if (abs >= 1e6) return sign + (abs / 1e6).toFixed(1) + 'M';
         if (abs >= 1e3) return sign + (abs / 1e3).toFixed(0) + 'K';
-        return String(num || 0);
+        return String(num);
     }
 
     function renderFlowLegendChips(brokers) {
@@ -1286,8 +1287,12 @@
             wrap.appendChild(chip);
 
             // Baris tabel: Broker (kode+nama) | B.Avg | S.Avg | Net — header kolomnya sudah ada di <thead>
-            const latestValue = b.data.length ? b.data[b.data.length - 1] : 0;
-            const valueColor = latestValue >= 0 ? '#10b981' : '#f43f5e';
+            // Ambil nilai net dari hari TERAKHIR YANG ADA DATANYA (skip null),
+            // bukan cuma elemen terakhir array — supaya broker yang kebetulan
+            // tidak aktif persis di tanggal paling akhir tidak tampil "0" palsu.
+            const lastNonNull = [...b.data].reverse().find(v => v !== null && v !== undefined);
+            const latestValue = lastNonNull !== undefined ? lastNonNull : null;
+            const valueColor = latestValue === null ? 'var(--muted)' : (latestValue >= 0 ? '#10b981' : '#f43f5e');
             const lastIdx = b.buy_avg && b.buy_avg.length ? b.buy_avg.length - 1 : -1;
             const lastBuyAvg = lastIdx >= 0 ? b.buy_avg[lastIdx] : null;
             const lastSellAvg = lastIdx >= 0 ? b.sell_avg[lastIdx] : null;
