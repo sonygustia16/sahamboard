@@ -1287,15 +1287,18 @@
             wrap.appendChild(chip);
 
             // Baris tabel: Broker (kode+nama) | B.Avg | S.Avg | Net — header kolomnya sudah ada di <thead>
-            // Ambil nilai net dari hari TERAKHIR YANG ADA DATANYA (skip null),
-            // bukan cuma elemen terakhir array — supaya broker yang kebetulan
-            // tidak aktif persis di tanggal paling akhir tidak tampil "0" palsu.
-            const lastNonNull = [...b.data].reverse().find(v => v !== null && v !== undefined);
-            const latestValue = lastNonNull !== undefined ? lastNonNull : null;
+            // Helper: cari nilai non-null TERAKHIR di sebuah array (skip hari broker
+            // tidak aktif), bukan asal ambil elemen paling akhir yang bisa null.
+            const lastNonNullOf = (arr) => {
+                if (!arr || !arr.length) return null;
+                const found = [...arr].reverse().find(v => v !== null && v !== undefined);
+                return found !== undefined ? found : null;
+            };
+
+            const latestValue = lastNonNullOf(b.data);
             const valueColor = latestValue === null ? 'var(--muted)' : (latestValue >= 0 ? '#10b981' : '#f43f5e');
-            const lastIdx = b.buy_avg && b.buy_avg.length ? b.buy_avg.length - 1 : -1;
-            const lastBuyAvg = lastIdx >= 0 ? b.buy_avg[lastIdx] : null;
-            const lastSellAvg = lastIdx >= 0 ? b.sell_avg[lastIdx] : null;
+            const lastBuyAvg = lastNonNullOf(b.buy_avg);
+            const lastSellAvg = lastNonNullOf(b.sell_avg);
 
             const tr = document.createElement('tr');
             tr.style.borderBottom = '1px solid var(--border)';
