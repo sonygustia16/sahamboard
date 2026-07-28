@@ -51,9 +51,16 @@ return [
     */
 
     'broker_summary' => [
+<<<<<<< HEAD
         'base_url'      => env('BROKER_API_BASE', 'https://stock.arjum.com/api/broker-summary'),
         'flow_base_url' => env('BROKER_FLOW_API_BASE', 'https://stock.arjum.com/api/broker-flow'),
         'api_key'       => env('BROKER_API_KEY'),
     ],
+=======
+    'base_url' => env('BROKER_API_BASE', 'https://stock.arjum.com/api/broker-summary'),
+    'api_key'  => env('BROKER_API_KEY'),
+],
+
+>>>>>>> 3656153 (fix: tutup array return di services.php yang belum closing)
 
 ];
