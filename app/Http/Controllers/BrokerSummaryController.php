@@ -5,8 +5,17 @@ namespace App\Http\Controllers;
 use App\Services\BrokerSummaryService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Log;   // ← tambahkan use ini
 
+/**
+ * Endpoint internal yang dipanggil dari JS (fetch) di screening.blade.php:
+ * - GET /broker-summary/{stockCode}  -> panel tabel agregat Buy/Sell/Net
+ * - GET /broker-flow/{stockCode}     -> overlay garis broker di chart Value NR
+ *
+ * Keduanya cuma jembatan tipis ke BrokerSummaryService + caching singkat, supaya:
+ * - API key TIDAK pernah terekspos ke browser (aman, key cuma hidup di server).
+ * - User yang gonta-ganti tab/toggle/timeframe tidak membombardir API eksternal
+ *   dengan request identik dalam waktu singkat.
+ */
 class BrokerSummaryController extends Controller
 {
     protected BrokerSummaryService $brokerSummary;
@@ -16,6 +25,10 @@ class BrokerSummaryController extends Controller
         $this->brokerSummary = $brokerSummary;
     }
 
+    /**
+     * GET /broker-summary/{stockCode}
+     * Query: start_date, end_date, net, broker_limit, level_limit, all_data
+     */
     public function show(Request $request, string $stockCode)
     {
         $stockCode = strtoupper($stockCode);
@@ -43,18 +56,13 @@ class BrokerSummaryController extends Controller
             ], 502);
         }
 
-        // ── DEBUG SEMENTARA: lihat bentuk asli data dari API ──
-        Log::info('DEBUG broker-summary response shape', [
-            'keys' => is_array($data) ? array_keys($data) : gettype($data),
-            'sample' => json_encode($data, JSON_PARTIAL_OUTPUT_ON_ERROR) 
-                ? substr(json_encode($data), 0, 1500) 
-                : 'unencodable',
-        ]);
-        // ── akhir debug ──
-
         return response()->json($data);
     }
 
+    /**
+     * GET /broker-flow/{stockCode}
+     * Query: dates (comma-separated YYYY-MM-DD), mode (value|volume)
+     */
     public function flow(Request $request, string $stockCode)
     {
         $stockCode = strtoupper($stockCode);
