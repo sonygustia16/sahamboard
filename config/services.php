@@ -54,3 +54,6 @@ return [
     'base_url' => env('BROKER_API_BASE', 'https://stock.arjum.com/api/broker-summary'),
     'api_key'  => env('BROKER_API_KEY'),
 ],
+
+
+];
