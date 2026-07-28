@@ -44,23 +44,16 @@ return [
     | BROKER_API_BASE / BROKER_API_KEY di .env — tidak perlu sentuh kode
     | BrokerSummaryService atau BrokerSummaryController sama sekali.
     |
-    | broker_flow_base_url dibiarkan bisa di-override terpisah lewat
+    | flow_base_url dibiarkan bisa di-override terpisah lewat
     | BROKER_FLOW_API_BASE, jaga-jaga kalau endpoint flow ternyata beda
     | path/domain dari endpoint broker-summary.
     |
     */
 
     'broker_summary' => [
-<<<<<<< HEAD
         'base_url'      => env('BROKER_API_BASE', 'https://stock.arjum.com/api/broker-summary'),
         'flow_base_url' => env('BROKER_FLOW_API_BASE', 'https://stock.arjum.com/api/broker-flow'),
         'api_key'       => env('BROKER_API_KEY'),
     ],
-=======
-    'base_url' => env('BROKER_API_BASE', 'https://stock.arjum.com/api/broker-summary'),
-    'api_key'  => env('BROKER_API_KEY'),
-],
-
->>>>>>> 3656153 (fix: tutup array return di services.php yang belum closing)
 
 ];
