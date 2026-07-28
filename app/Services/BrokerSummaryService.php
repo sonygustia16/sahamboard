@@ -79,22 +79,27 @@ class BrokerSummaryService
     /**
      * Broker Flow Overlay (dipakai untuk overlay garis broker di chart Value NR).
      *
-     * Provider (stock.arjum.com) TIDAK menyediakan endpoint khusus "broker-flow" —
-     * hanya 8 endpoint resmi, salah satunya "broker-summary". Jadi flow di sini
-     * dibangun dari broker-summary dengan 2 tahap:
+     * SEMUA angka di sini (garis chart, NET/Akum-distri, B.Avg, S.Avg) mengacu
+     * ke SATU periode yang sama: seluruh rentang $dates yang diminta (sesuai
+     * timeframe yang dipilih user — 7H/1M/3M/6M/1Y), BUKAN snapshot 1 hari
+     * terakhir. Ini supaya konsisten dengan cara kerja tools sejenis (Stockbit dst):
      *
-     *  1) TOP-N BROKER: satu kali panggilan broker-summary dengan start_date/end_date
-     *     MENCAKUP SELURUH rentang tanggal yang diminta (all_data=true). Ini yang
-     *     bikin daftar broker beneran DINAMIS mengikuti timeframe yang dipilih user
-     *     (1M/3M/6M/1Y) — bukan selalu berdasar beberapa hari terakhir saja.
+     *  1) TOTAL PERIODE: satu kali panggilan broker-summary dengan start_date/end_date
+     *     MENCAKUP SELURUH rentang tanggal (all_data=true). Dari sini didapat:
+     *     - nval/nvol per broker = TOTAL net akumulasi/distribusi selama periode
+     *       (dipakai sebagai angka "Akum/distri" / NET, dan sebagai titik akhir
+     *       garis kumulatif di chart)
+     *     - bval/bvol, sval/svol per broker = dipakai hitung B.Avg & S.Avg
+     *       SEBAGAI RATA-RATA TERTIMBANG SELURUH PERIODE (bukan snapshot harian)
      *
-     *  2) DERET WAKTU: untuk menggambar garis overlay per hari, idealnya perlu data
-     *     harian sepanjang periode. Supaya tidak generate ratusan request paralel
-     *     untuk rentang panjang (mis. 1Y ~250 hari bursa), tanggal di-DOWNSAMPLE
-     *     MERATA (ambil sampel titik menyebar dari awal s/d akhir periode) —
-     *     BUKAN dipotong ke beberapa hari terakhir saja. Titik yang tidak ikut
-     *     ter-sample diisi null; dataset overlay di frontend sudah pakai
-     *     spanGaps:true jadi garis tetap tersambung mulus.
+     *  2) BENTUK GARIS (chart shape): dihitung dari kontribusi harian (fetch per
+     *     tanggal, di-downsample untuk rentang panjang spt 1Y) yang diakumulasi
+     *     berjalan (running sum), lalu di-skalakan supaya titik AKHIR garis
+     *     PERSIS SAMA dengan total periode dari langkah (1) — jadi bentuk garis
+     *     tetap representatif, tapi angka akhirnya selalu akurat & konsisten.
+     *
+     *  3) URUTAN broker: mengikuti urutan asli dari API (nval/nvol DESC
+     *     keseluruhan), bukan dikelompokkan blok "semua buyer dulu baru seller".
      *
      * @param string $stockCode
      * @param array $dates array tanggal YYYY-MM-DD (urut sesuai sumbu-X chart)
@@ -119,7 +124,7 @@ class BrokerSummaryService
         $firstDate = $dates[0];
         $lastDate  = end($dates);
 
-        // ── TAHAP 1: Top-N broker paling aktif SEPANJANG PERIODE PENUH ──
+        // ── TAHAP 1: Data TOTAL sepanjang periode penuh (satu kali panggilan) ──
         $aggregate = $this->getBrokerSummary($stockCode, [
             'start_date' => $firstDate,
             'end_date'   => $lastDate,
@@ -132,25 +137,67 @@ class BrokerSummaryService
         }
 
         $sortKey = $mode === 'volume' ? 'nvol' : 'nval';
+        $allBrokers = $aggregate['brokers']; // sudah terurut nval DESC sesuai kontrak API
 
-        $sortedBrokers = $aggregate['brokers'];
-        usort($sortedBrokers, fn ($a, $b) => abs($b[$sortKey] ?? 0) <=> abs($a[$sortKey] ?? 0));
-        $topBrokers = array_slice($sortedBrokers, 0, $topN);
+        // Pisahkan net BUYER (akumulasi, positif) & net SELLER (distribusi, negatif)
+        // untuk memastikan overlay menampilkan CAMPURAN keduanya (bukan cuma
+        // didominasi satu sisi), tapi urutan TAMPIL tetap ikut urutan asli API.
+        $buyers  = array_filter($allBrokers, fn ($b) => ($b[$sortKey] ?? 0) > 0);
+        $sellers = array_filter($allBrokers, fn ($b) => ($b[$sortKey] ?? 0) < 0);
 
-        $topCodes = [];
-        $brokerMeta = [];
-        foreach ($topBrokers as $b) {
-            if (empty($b['broker_code'])) continue;
-            $topCodes[] = $b['broker_code'];
-            $brokerMeta[$b['broker_code']] = $b['broker_name'] ?? $b['broker_code'];
+        $buyersSorted = $buyers;
+        usort($buyersSorted, fn ($a, $b) => ($b[$sortKey] ?? 0) <=> ($a[$sortKey] ?? 0));
+        $sellersSorted = $sellers;
+        usort($sellersSorted, fn ($a, $b) => abs($b[$sortKey] ?? 0) <=> abs($a[$sortKey] ?? 0));
+
+        $halfN = (int) ceil($topN / 2);
+        $topBuyers  = array_slice($buyersSorted, 0, $halfN);
+        $topSellers = array_slice($sellersSorted, 0, $topN - count($topBuyers));
+
+        $remaining = $topN - count($topBuyers) - count($topSellers);
+        if ($remaining > 0 && count($topBuyers) < count($buyersSorted)) {
+            $topBuyers = array_slice($buyersSorted, 0, count($topBuyers) + $remaining);
+        } elseif ($remaining > 0 && count($topSellers) < count($sellersSorted)) {
+            $topSellers = array_slice($sellersSorted, 0, count($topSellers) + $remaining);
         }
 
-        if (empty($topCodes)) {
+        $topCodesSet = [];
+        foreach (array_merge($topBuyers, $topSellers) as $b) {
+            if (!empty($b['broker_code'])) {
+                $topCodesSet[$b['broker_code']] = true;
+            }
+        }
+
+        if (empty($topCodesSet)) {
             return ['brokers' => []];
         }
 
-        // ── TAHAP 2: Deret waktu harian untuk broker-broker top itu, di-downsample
-        //    supaya mencakup SELURUH periode tanpa request meledak ──
+        // Susun ulang sesuai urutan ASLI dari API (bukan blok buyer-dulu-seller),
+        // biar tampilannya natural seperti contoh (mis. ZP, BB, YU, XL, DX, AK).
+        $orderedTopBrokers = array_values(array_filter(
+            $allBrokers,
+            fn ($b) => isset($topCodesSet[$b['broker_code'] ?? null])
+        ));
+
+        $topCodes = [];
+        $brokerMeta = [];
+        $totalNetByCode = [];   // total akumulasi/distribusi periode penuh
+        $periodBuyAvg   = [];   // rata-rata beli tertimbang sepanjang periode
+        $periodSellAvg  = [];   // rata-rata jual tertimbang sepanjang periode
+
+        foreach ($orderedTopBrokers as $b) {
+            $code = $b['broker_code'];
+            $topCodes[] = $code;
+            $brokerMeta[$code] = $b['broker_name'] ?? $code;
+            $totalNetByCode[$code] = $b[$sortKey] ?? 0;
+
+            $bvol = $b['bvol'] ?? 0;
+            $svol = $b['svol'] ?? 0;
+            $periodBuyAvg[$code]  = $bvol > 0 ? round(($b['bval'] ?? 0) / $bvol, 2) : null;
+            $periodSellAvg[$code] = $svol > 0 ? round(($b['sval'] ?? 0) / $svol, 2) : null;
+        }
+
+        // ── TAHAP 2: Bentuk garis harian (di-downsample untuk rentang panjang) ──
         $sampledDates = $this->downsampleDates($dates, 90);
 
         try {
@@ -169,10 +216,8 @@ class BrokerSummaryService
             return null;
         }
 
-        $seriesByBroker  = []; // broker_code => [date => net value/volume]
-        $buyAvgByBroker  = []; // broker_code => [date => buy avg price]
-        $sellAvgByBroker = []; // broker_code => [date => sell avg price]
-        $anySuccess      = false;
+        $dailyContribution = []; // broker_code => [date => nilai harian]
+        $anySuccess = false;
 
         foreach ($sampledDates as $date) {
             $response = $responses[$date] ?? null;
@@ -192,15 +237,9 @@ class BrokerSummaryService
 
             foreach ($brokers as $b) {
                 $code = $b['broker_code'] ?? null;
-                if (!$code || !in_array($code, $topCodes, true)) continue;
+                if (!$code || !isset($topCodesSet[$code])) continue;
 
-                $value = $mode === 'volume' ? ($b['nvol'] ?? 0) : ($b['nval'] ?? 0);
-                $seriesByBroker[$code][$date] = $value;
-
-                $bvol = $b['bvol'] ?? 0;
-                $svol = $b['svol'] ?? 0;
-                $buyAvgByBroker[$code][$date]  = $bvol > 0 ? round(($b['bval'] ?? 0) / $bvol, 2) : null;
-                $sellAvgByBroker[$code][$date] = $svol > 0 ? round(($b['sval'] ?? 0) / $svol, 2) : null;
+                $dailyContribution[$code][$date] = $mode === 'volume' ? ($b['nvol'] ?? 0) : ($b['nval'] ?? 0);
             }
         }
 
@@ -208,27 +247,45 @@ class BrokerSummaryService
             return null;
         }
 
-        // Kembalikan data untuk SEMUA tanggal asli ($dates), supaya jumlah titik
-        // selaras dengan sumbu-X chart utama. Tanggal yang tidak ikut ter-sample
-        // otomatis null (spanGaps:true di frontend bikin garis tetap mulus).
         $result = [];
         foreach ($topCodes as $code) {
-            $data = [];
-            $buyAvg = [];
-            $sellAvg = [];
-
+            // Kumulatif berjalan sepanjang $dates penuh (carry-forward, tanpa null),
+            // supaya bentuk garis mirip Stockbit: naik/turun mengikuti aktivitas,
+            // rata kalau tidak ada transaksi di hari itu.
+            $cumulative = [];
+            $running = 0.0;
             foreach ($dates as $date) {
-                $data[]    = $seriesByBroker[$code][$date]  ?? null;
-                $buyAvg[]  = $buyAvgByBroker[$code][$date]  ?? null;
-                $sellAvg[] = $sellAvgByBroker[$code][$date] ?? null;
+                $running += $dailyContribution[$code][$date] ?? 0;
+                $cumulative[] = $running;
             }
+
+            // Skalakan supaya titik AKHIR garis PERSIS SAMA dengan total resmi
+            // dari broker-summary periode penuh (Tahap 1) — jadi angka legend,
+            // tabel, dan ujung garis chart selalu konsisten satu sama lain.
+            $totalNet = $totalNetByCode[$code] ?? 0;
+            $rawFinal = end($cumulative) ?: 0;
+
+            if ($rawFinal != 0) {
+                $scale = $totalNet / $rawFinal;
+                $cumulative = array_map(fn ($v) => round($v * $scale, 2), $cumulative);
+            } elseif ($totalNet != 0) {
+                // Tidak ada kontribusi harian tersampel sama sekali, tapi totalnya
+                // bukan nol (mis. semua terjadi di tanggal yang tidak ke-sample) —
+                // taruh langsung di titik terakhir supaya angka tetap akurat.
+                $cumulative[count($cumulative) - 1] = $totalNet;
+            }
+
+            // buy_avg/sell_avg konstan (rata-rata tertimbang periode penuh) di
+            // setiap titik — bukan snapshot per hari — sesuai semantik "Akum/distri".
+            $buyAvgArr  = array_fill(0, count($dates), $periodBuyAvg[$code] ?? null);
+            $sellAvgArr = array_fill(0, count($dates), $periodSellAvg[$code] ?? null);
 
             $result[] = [
                 'broker_code' => $code,
                 'broker_name' => $brokerMeta[$code] ?? $code,
-                'data'        => $data,
-                'buy_avg'     => $buyAvg,
-                'sell_avg'    => $sellAvg,
+                'data'        => $cumulative,
+                'buy_avg'     => $buyAvgArr,
+                'sell_avg'    => $sellAvgArr,
             ];
         }
 
