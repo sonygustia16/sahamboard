@@ -313,19 +313,32 @@ class StockFilterController extends Controller
     public function chartData(Request $request, string $stockCode)
     {
         $stockCode = strtoupper($stockCode);
-        $timeframe = $request->query('timeframe', '1m');
 
-        $daysMap = ['7d' => 7, '1m' => 30, '3m' => 90, '6m' => 180, '1y' => 365];
-        $days = $daysMap[$timeframe] ?? 30;
+        $endDate   = $request->query('end');
+        $startDate = $request->query('start');
+
+        if (empty($endDate)) {
+            $endDate = now()->toDateString();
+        }
+
+        if (empty($startDate)) {
+            // Fallback untuk kompatibilitas mundur kalau ada pemanggil lama yang
+            // masih kirim ?timeframe= (mis. cache browser lama / bookmark).
+            $timeframe = $request->query('timeframe', '1m');
+            $daysMap = ['7d' => 7, '1m' => 30, '3m' => 90, '6m' => 180, '1y' => 365];
+            $days = $daysMap[$timeframe] ?? 30;
+            $startDate = \Illuminate\Support\Carbon::parse($endDate)->subDays($days)->toDateString();
+        }
 
         // Ambil data ekstra 100 hari SEBELUM rentang tampilan, khusus buat "pemanasan"
         // perhitungan indikator (RSI/MACD butuh histori sebelum titik pertama supaya akurat,
         // bukan cuma buat data yang ditampilkan di chart).
-        $warmupDays = $days + 100;
+        $warmupStart = \Illuminate\Support\Carbon::parse($startDate)->subDays(100)->toDateString();
 
         $rows = RingkasanSaham::query()
             ->where('stock_code', $stockCode)
-            ->where('date', '>=', now()->subDays($warmupDays)->toDateString())
+            ->where('date', '>=', $warmupStart)
+            ->where('date', '<=', $endDate)
             ->orderBy('date', 'asc')
             ->get(['date', 'value', 'close', 'non_regular_value']);
 
@@ -336,15 +349,15 @@ class StockFilterController extends Controller
         [$macdLineAll, $macdSignalAll, $macdHistAll] = $this->calcMacd($closesAll, 12, 26, 9);
 
         // Potong lagi cuma bagian yang mau ditampilkan (buang periode warm-up)
-        $cutoffDate = now()->subDays($days)->toDateString();
-        $displayRows = $rows->filter(fn ($r) => $r->date >= $cutoffDate)->values();
+        $displayRows = $rows->filter(fn ($r) => $r->date >= $startDate && $r->date <= $endDate)->values();
         $startIndex = $rows->count() - $displayRows->count();
 
         $slice = fn ($arr) => array_values(array_slice($arr, $startIndex));
 
         return response()->json([
             'stock_code'   => $stockCode,
-            'timeframe'    => $timeframe,
+            'start_date'   => $startDate,
+            'end_date'     => $endDate,
             'labels'       => $displayRows->map(fn ($r) => \Illuminate\Support\Carbon::parse($r->date)->format('d M y'))->all(),
             'dates'        => $displayRows->map(fn ($r) => \Illuminate\Support\Carbon::parse($r->date)->format('Y-m-d'))->all(),
             'values'       => $displayRows->map(fn ($r) => (float) $r->value)->all(),
