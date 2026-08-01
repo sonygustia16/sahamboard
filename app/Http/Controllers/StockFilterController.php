@@ -340,7 +340,7 @@ class StockFilterController extends Controller
             ->where('date', '>=', $warmupStart)
             ->where('date', '<=', $endDate)
             ->orderBy('date', 'asc')
-            ->get(['date', 'value', 'close', 'non_regular_value']);
+            ->get(['date', 'value', 'close', 'non_regular_value', 'foreign_buy', 'foreign_sell']);
 
         $closesAll = $rows->map(fn ($r) => (float) $r->close)->values()->all();
 
@@ -363,6 +363,8 @@ class StockFilterController extends Controller
             'values'       => $displayRows->map(fn ($r) => (float) $r->value)->all(),
             'closes'       => $displayRows->map(fn ($r) => (float) $r->close)->all(),
             'non_regular_values' => $displayRows->map(fn ($r) => (float) $r->non_regular_value)->all(),
+            'foreign_buy'  => $displayRows->map(fn ($r) => (float) $r->foreign_buy)->all(),
+            'foreign_sell' => $displayRows->map(fn ($r) => (float) $r->foreign_sell)->all(),
             'rsi'          => $slice($rsiAll),
             'stoch_k'      => $slice($stochKAll),
             'stoch_d'      => $slice($stochDAll),

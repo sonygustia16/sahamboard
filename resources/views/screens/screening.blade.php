@@ -335,6 +335,13 @@
                     </table>
                 </div>
                 <div id="brokerDateRange" style="margin-top:0.4rem; font-size:0.7rem; color:var(--muted); text-align:right;"></div>
+
+                <div style="margin-top:1.2rem;">
+                    <div style="font-size:0.75rem; color:var(--muted); margin-bottom:0.3rem; font-family:var(--mono);">Net Foreign Flow</div>
+                    <div style="position:relative; height:150px;">
+                        <canvas id="foreignFlowChart"></canvas>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -636,8 +643,9 @@
     let rsiChartInstance = null;
     let stochRsiChartInstance = null;
     let macdChartInstance = null;
+    let foreignFlowChartInstance = null;
 
-    function renderIndicators(labels, rsi, stochK, stochD, macdLine, macdSignal, macdHist) {
+    function renderIndicators(labels, rsi, stochK, stochD, macdLine, macdSignal, macdHist, foreignBuy, foreignSell, closesForFlow) {
         Chart.defaults.color = '#94a3b8';
         Chart.defaults.font.family = "'Inter', sans-serif";
 
@@ -770,6 +778,47 @@
                     tooltip: {
                         backgroundColor: '#1e293b', borderColor: 'rgba(34,211,238,0.3)', borderWidth: 1,
                         callbacks: { label: (ctx) => ctx.dataset.label + ': ' + (ctx.raw !== null ? ctx.raw.toFixed(2) : '-') }
+                    }
+                }
+            }
+        });
+
+        // ══ Net Foreign Flow: bar hijau (net buy) / merah (net sell) + garis harga ══
+        if (foreignFlowChartInstance) foreignFlowChartInstance.destroy();
+        const netForeign = foreignBuy.map((b, i) => (b === null || foreignSell[i] === null) ? null : (b - foreignSell[i]));
+        const flowColors = netForeign.map(v => v === null ? 'transparent' : (v >= 0 ? 'rgba(34,197,94,0.75)' : 'rgba(239,68,68,0.75)'));
+
+        foreignFlowChartInstance = new Chart(document.getElementById('foreignFlowChart').getContext('2d'), {
+            data: {
+                labels: labels,
+                datasets: [
+                    { type: 'bar', label: 'Net Foreign', data: netForeign, backgroundColor: flowColors, borderWidth: 0, order: 2, yAxisID: 'yFlow' },
+                    { type: 'line', label: 'Price', data: closesForFlow, borderColor: '#38bdf8', borderWidth: 1.8, pointRadius: 0, tension: 0.3, spanGaps: true, order: 0, yAxisID: 'yPrice' }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    x: commonXAxis,
+                    yFlow: {
+                        position: 'left', grid: commonGrid,
+                        ticks: { color: '#64748b', callback: (v) => (Math.abs(v) >= 1e9 ? (v/1e9).toFixed(1) + 'B' : (v/1e6).toFixed(0) + 'Jt') }
+                    },
+                    yPrice: {
+                        position: 'right', grid: { drawOnChartArea: false },
+                        ticks: { color: '#38bdf8' }
+                    }
+                },
+                plugins: {
+                    legend: { display: true, position: 'top', align: 'end', labels: { boxWidth: 10, font: { size: 10 } } },
+                    tooltip: {
+                        backgroundColor: '#1e293b', borderColor: 'rgba(34,211,238,0.3)', borderWidth: 1,
+                        callbacks: {
+                            label: (ctx) => ctx.dataset.label === 'Price'
+                                ? 'Price: ' + (ctx.raw !== null ? new Intl.NumberFormat('id-ID').format(ctx.raw) : '-')
+                                : 'Net Foreign: ' + (ctx.raw !== null ? (ctx.raw >= 0 ? '+' : '') + (ctx.raw/1e9).toFixed(2) + 'B' : '-')
+                        }
                     }
                 }
             }
@@ -978,7 +1027,7 @@
                 renderClickChart(data.labels, data.values, data.closes, data.non_regular_values);
                 updateSignalBadge(data.values, data.closes);
                 document.getElementById('indicatorPanels').style.display = 'block';
-                renderIndicators(data.labels, data.rsi, data.stoch_k, data.stoch_d, data.macd_line, data.macd_signal, data.macd_hist);
+                renderIndicators(data.labels, data.rsi, data.stoch_k, data.stoch_d, data.macd_line, data.macd_signal, data.macd_hist, data.foreign_buy, data.foreign_sell, data.closes);
 
                 delete brokerLoadedForCode[code];
                 if (document.getElementById('panelBroker').style.display !== 'none') {
@@ -1308,6 +1357,10 @@
 
             if (target === 'broker' && activeStockCode && !brokerLoadedForCode[activeStockCode]) {
                 loadBrokerSummary(activeStockCode);
+            }
+
+            if (target === 'broker' && foreignFlowChartInstance) {
+                foreignFlowChartInstance.resize();
             }
         });
     });
