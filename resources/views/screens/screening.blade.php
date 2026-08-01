@@ -212,8 +212,9 @@
         {{-- Badge sinyal otomatis: bandingkan tren Value NR vs Close Price --}}
         <div id="signalBadge" style="display:none; margin-bottom:0.8rem; padding:0.6rem 0.9rem; border-radius:8px; font-size:0.8rem; font-weight:600;"></div>
 
-        <div style="position:relative; height:260px;">
+        <div id="clickChartWrap" style="position:relative; height:260px;">
             <canvas id="clickChart"></canvas>
+            <div id="clickChartTooltip" class="custom-tooltip"></div>
         </div>
         <div id="chartLoading" style="display:none; text-align:center; color:var(--muted); font-size:0.8rem; padding:0.5rem;">Memuat data...</div>
         <div id="chartEmpty" style="display:none; text-align:center; color:var(--muted); font-size:0.8rem; padding:0.5rem;">Belum ada data historis untuk saham ini di rentang waktu tersebut.</div>
@@ -478,6 +479,18 @@
 
 @push('body-scripts')
 <style>
+    .custom-tooltip {
+        position: absolute; opacity: 0; pointer-events: auto; z-index: 20;
+        background: #1e293b; border: 1px solid rgba(34,211,238,0.3); border-radius: 6px;
+        padding: 0.35rem 0.5rem; font-size: 0.68rem; line-height: 1.5; color: #e2e8f0;
+        white-space: nowrap; transition: opacity 0.1s ease; box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    }
+    .tooltip-copy-btn {
+        background: none; border: none; cursor: pointer; font-size: 0.7rem; padding: 0 0.1rem;
+        line-height: 1; opacity: 0.75;
+    }
+    .tooltip-copy-btn:hover { opacity: 1; }
+
     #kriteriaPencarianBody {
         overflow: hidden;
         max-height: 2000px;
@@ -1159,65 +1172,12 @@
                         }
                     },
                     tooltip: {
-                        backgroundColor: '#1e293b',
-                        borderColor: 'rgba(34,211,238,0.3)',
-                        borderWidth: 1,
-                        titleColor: '#fff',
-                        bodyColor: '#e2e8f0',
-                        footerColor: function(items) {
-                            if (!items || !items.length) return '#94a3b8';
-                            const idx = items[0].dataIndex;
-                            if (idx === 0) return '#94a3b8';
-
-                            const valPct = pctChange(currentChartValues[idx - 1], currentChartValues[idx]);
-                            const closePct = pctChange(currentChartCloses[idx - 1], currentChartCloses[idx]);
-
-                            if (closePct <= -SIGNAL_CLOSE_PCT_THRESHOLD && valPct >= SIGNAL_VALUE_PCT_THRESHOLD) {
-                                return '#10b981';
-                            } else if (closePct >= SIGNAL_CLOSE_PCT_THRESHOLD && valPct <= -SIGNAL_VALUE_PCT_THRESHOLD) {
-                                return '#f59e0b';
-                            }
-                            return '#94a3b8';
-                        },
-                        footerFont: { weight: '600', size: 11 },
-                        padding: 10,
-                        callbacks: {
-                            label: function(context) {
-                                if (context.dataset.brokerCode) {
-                                    return context.dataset.brokerCode + ': ' + formatFlowValue(context.raw);
-                                }
-                                if (context.dataset.yAxisID === 'yClose') {
-                                    return 'Close: Rp ' + new Intl.NumberFormat('id-ID').format(context.raw);
-                                }
-                                if (context.dataset.label === 'Non-Regular Value') {
-                                    return 'Non-Regular Value: Rp ' + formatSingkat(context.raw);
-                                }
-                                return 'Value NR: Rp ' + formatSingkat(context.raw);
-                            },
-                            labelTextColor: function(context) {
-                                if (context.dataset.brokerCode) {
-                                    return context.raw >= 0 ? '#10b981' : '#f43f5e';
-                                }
-                                return '#e2e8f0';
-                            },
-                            footer: function(items) {
-                                const idx = items[0].dataIndex;
-                                if (idx === 0) return '';
-
-                                const valPct = pctChange(currentChartValues[idx - 1], currentChartValues[idx]);
-                                const closePct = pctChange(currentChartCloses[idx - 1], currentChartCloses[idx]);
-
-                                if (closePct <= -SIGNAL_CLOSE_PCT_THRESHOLD && valPct >= SIGNAL_VALUE_PCT_THRESHOLD) {
-                                    return `🟢 Close turun ${closePct.toFixed(1)}%, Value naik ${valPct.toFixed(0)}% — berpotensi akumulasi`;
-                                } else if (closePct >= SIGNAL_CLOSE_PCT_THRESHOLD && valPct <= -SIGNAL_VALUE_PCT_THRESHOLD) {
-                                    return `🟡 Close naik ${closePct.toFixed(1)}%, Value turun ${Math.abs(valPct).toFixed(0)}% — hati-hati`;
-                                }
-                                return '';
-                            }
-                        }
+                        enabled: false, // pakai tooltip HTML custom (lebih kecil + tombol salin)
+                        external: (context) => renderCustomTooltip(context, 'clickChartTooltip', 'clickChartWrap')
                     }
                 }
-            }
+            },
+            plugins: [crosshairPlugin]
         });
 
         // Kalau overlay broker flow sedang ON, dataset broker perlu di-attach ulang
@@ -1225,6 +1185,111 @@
         if (flowOverlayActive && currentChartDates.length > 0) {
             loadBrokerFlowOverlay();
         }
+    }
+
+    // ══ Crosshair vertikal ala TradingView, muncul saat hover/geser di chart ══
+    const crosshairPlugin = {
+        id: 'crosshairPlugin',
+        afterDraw(chart) {
+            if (!chart.tooltip || !chart.tooltip._active || !chart.tooltip._active.length) return;
+            const activePoint = chart.tooltip._active[0];
+            const { ctx, chartArea } = chart;
+            const x = activePoint.element.x;
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(x, chartArea.top);
+            ctx.lineTo(x, chartArea.bottom);
+            ctx.lineWidth = 1;
+            ctx.setLineDash([3, 3]);
+            ctx.strokeStyle = 'rgba(148,163,184,0.6)';
+            ctx.stroke();
+            ctx.restore();
+        }
+    };
+
+    // ══ Tooltip HTML custom: kecil kayak tooltip biasa, ada tombol salin, getar di HP ══
+    // Mendukung dataset biasa (Value NR/Close/Non-Regular Value) DAN dataset broker overlay.
+    let lastVibratedIndex = {};
+    function renderCustomTooltip(context, tooltipElId, wrapElId) {
+        const { chart, tooltip } = context;
+        const tooltipEl = document.getElementById(tooltipElId);
+        const wrapEl = document.getElementById(wrapElId);
+        if (!tooltipEl || !wrapEl) return;
+
+        if (!tooltip || tooltip.opacity === 0) {
+            tooltipEl.style.opacity = 0;
+            return;
+        }
+
+        const idx = tooltip.dataPoints && tooltip.dataPoints[0] ? tooltip.dataPoints[0].dataIndex : null;
+        if (idx !== null && lastVibratedIndex[tooltipElId] !== idx) {
+            lastVibratedIndex[tooltipElId] = idx;
+            try { if (navigator.vibrate) navigator.vibrate(12); } catch (e) {}
+        }
+
+        const lines = tooltip.dataPoints.map(dp => {
+            const ds = dp.dataset;
+            let label;
+            if (ds.brokerCode) {
+                label = ds.brokerCode + ': ' + formatFlowValue(dp.raw);
+            } else if (ds.yAxisID === 'yClose') {
+                label = 'Close: Rp ' + new Intl.NumberFormat('id-ID').format(dp.raw);
+            } else if (ds.label === 'Non-Regular Value') {
+                label = 'Non-Regular Value: Rp ' + formatSingkat(dp.raw);
+            } else {
+                label = 'Value NR: Rp ' + formatSingkat(dp.raw);
+            }
+            const dotColor = ds.brokerCode ? (dp.raw >= 0 ? '#10b981' : '#f43f5e') : ds.borderColor;
+            return `<span style="color:${dotColor};">●</span> ${label}`;
+        });
+
+        let footerLine = '';
+        if (idx !== null && idx > 0 && typeof currentChartValues !== 'undefined' && currentChartValues[idx] !== undefined) {
+            const valPct = pctChange(currentChartValues[idx - 1], currentChartValues[idx]);
+            const closePct = pctChange(currentChartCloses[idx - 1], currentChartCloses[idx]);
+            if (closePct <= -SIGNAL_CLOSE_PCT_THRESHOLD && valPct >= SIGNAL_VALUE_PCT_THRESHOLD) {
+                footerLine = `<div style="color:#10b981; margin-top:2px;">🟢 Close turun ${closePct.toFixed(1)}%, Value naik ${valPct.toFixed(0)}% — akumulasi</div>`;
+            } else if (closePct >= SIGNAL_CLOSE_PCT_THRESHOLD && valPct <= -SIGNAL_VALUE_PCT_THRESHOLD) {
+                footerLine = `<div style="color:#f59e0b; margin-top:2px;">🟡 Close naik ${closePct.toFixed(1)}%, Value turun ${Math.abs(valPct).toFixed(0)}% — hati-hati</div>`;
+            }
+        }
+
+        const rawTextForCopy = [tooltip.title[0] || '', ...lines.map(l => l.replace(/<[^>]+>/g, ''))].join(' | ');
+
+        tooltipEl.innerHTML = `
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:0.4rem; margin-bottom:2px;">
+                <strong style="font-size:0.7rem;">${tooltip.title[0] || ''}</strong>
+                <button type="button" class="tooltip-copy-btn" title="Salin info">📋</button>
+            </div>
+            ${lines.map(l => `<div>${l}</div>`).join('')}
+            ${footerLine}
+        `;
+
+        tooltipEl.querySelector('.tooltip-copy-btn').onclick = (e) => {
+            e.stopPropagation();
+            navigator.clipboard.writeText(rawTextForCopy).then(() => {
+                const btn = tooltipEl.querySelector('.tooltip-copy-btn');
+                btn.textContent = '✅';
+                setTimeout(() => { btn.textContent = '📋'; }, 1000);
+            }).catch(() => {});
+        };
+
+        const offsetLeft = chart.canvas.offsetLeft;
+        const offsetTop = chart.canvas.offsetTop;
+        let left = offsetLeft + tooltip.caretX + 12;
+        let top = offsetTop + tooltip.caretY - 10;
+
+        const wrapWidth = wrapEl.offsetWidth;
+        tooltipEl.style.opacity = 1;
+        tooltipEl.style.left = left + 'px';
+        tooltipEl.style.top = top + 'px';
+        requestAnimationFrame(() => {
+            const ttWidth = tooltipEl.offsetWidth;
+            if (left + ttWidth > wrapWidth) {
+                tooltipEl.style.left = (offsetLeft + tooltip.caretX - ttWidth - 12) + 'px';
+            }
+        });
     }
 
     // ══ Tab switcher: Indikator vs Broker Summary ══
