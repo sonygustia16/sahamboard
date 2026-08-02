@@ -363,8 +363,11 @@ class StockFilterController extends Controller
             'values'       => $displayRows->map(fn ($r) => (float) $r->value)->all(),
             'closes'       => $displayRows->map(fn ($r) => (float) $r->close)->all(),
             'non_regular_values' => $displayRows->map(fn ($r) => (float) $r->non_regular_value)->all(),
-            'foreign_buy'  => $displayRows->map(fn ($r) => (float) $r->foreign_buy)->all(),
-            'foreign_sell' => $displayRows->map(fn ($r) => (float) $r->foreign_sell)->all(),
+            // Catatan: kolom foreign_buy/foreign_sell dari API IDX satuannya LEMBAR SAHAM,
+            // bukan nilai Rupiah. Supaya sebanding dengan "Net Foreign Flow" ala Stockbit
+            // (yang dalam Rupiah), harus dikonversi dulu: lembar × harga close hari itu.
+            'foreign_buy'  => $displayRows->map(fn ($r) => (float) $r->foreign_buy * (float) $r->close)->all(),
+            'foreign_sell' => $displayRows->map(fn ($r) => (float) $r->foreign_sell * (float) $r->close)->all(),
             'rsi'          => $slice($rsiAll),
             'stoch_k'      => $slice($stochKAll),
             'stoch_d'      => $slice($stochDAll),
