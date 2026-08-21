@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BrokerSummaryController;
+use App\Http\Controllers\InsiderTransactionController;
 use App\Http\Controllers\StockFilterController;
 use App\Http\Controllers\StockAnalysisController;
 use App\Http\Controllers\EntryPlanController;
@@ -38,6 +39,9 @@ Route::middleware(EnsureAuthenticated::class)->group(function () {
     // Broker Summary & Broker Flow Overlay — dipanggil via fetch() dari screening.blade.php
     Route::get('/broker-summary/{stockCode}', [BrokerSummaryController::class, 'show'])->name('broker-summary.show');
     Route::get('/broker-flow/{stockCode}', [BrokerSummaryController::class, 'flow'])->name('broker-flow.show');
+
+    // Transaksi Insider — dipanggil via fetch() dari screening.blade.php (tab di sebelah Broker Summary)
+    Route::get('/insider-transaction/{stockCode}', [InsiderTransactionController::class, 'show'])->name('insider-transaction.show');
 });
 
     Route::post('/filter-preset', [StockFilterController::class, 'storePreset'])->name('filter-preset.store');

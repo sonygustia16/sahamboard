@@ -281,6 +281,8 @@ class StockFilterController extends Controller
             'frequency'    => 'nullable|string',
             'op_value'     => 'nullable|in:=,!=,<,<=,>,>=',
             'value'        => 'nullable|string',
+            'op_non_regular_value' => 'nullable|in:=,!=,<,<=,>,>=',
+            'non_regular_value'    => 'nullable|string',
         ]);
 
         SavedFilter::create([
@@ -291,6 +293,8 @@ class StockFilterController extends Controller
             'frequency'    => $this->cleanNumber($validated['frequency'] ?? '') ?: null,
             'op_value'     => $validated['op_value'] ?? '=',
             'value'        => $this->cleanNumber($validated['value'] ?? '') ?: null,
+            'op_non_regular_value' => $validated['op_non_regular_value'] ?? '=',
+            'non_regular_value'    => $this->cleanNumber($validated['non_regular_value'] ?? '') ?: null,
         ]);
 
         return redirect()->back()->with('success', 'Preset filter tersimpan.');

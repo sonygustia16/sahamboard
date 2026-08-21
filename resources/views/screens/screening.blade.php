@@ -153,6 +153,8 @@
         <input type="hidden" name="frequency" id="presetFrequency">
         <input type="hidden" name="op_value" id="presetOpValue">
         <input type="hidden" name="value" id="presetValue">
+        <input type="hidden" name="op_non_regular_value" id="presetOpNonRegularValue">
+        <input type="hidden" name="non_regular_value" id="presetNonRegularValue">
     </form>
 
     {{-- Chart card — muncul begitu klik kode saham di tabel --}}
@@ -263,6 +265,7 @@
             <div style="display:flex; gap:0.3rem; margin-bottom:0.8rem; border-bottom:1px solid var(--border);">
                 <button type="button" class="btn btn-ghost panel-tab-btn active" data-panel="indicators" style="padding:0.5rem 1rem; font-size:0.78rem; border-radius:6px 6px 0 0; border-bottom:2px solid var(--cyan);">📈 Indikator</button>
                 <button type="button" class="btn btn-ghost panel-tab-btn" data-panel="broker" style="padding:0.5rem 1rem; font-size:0.78rem; border-radius:6px 6px 0 0; border-bottom:2px solid transparent;">🧾 Broker Summary</button>
+                <button type="button" class="btn btn-ghost panel-tab-btn" data-panel="insider" style="padding:0.5rem 1rem; font-size:0.78rem; border-radius:6px 6px 0 0; border-bottom:2px solid transparent;">🧑‍💼 Transaksi Insider</button>
             </div>
 
             {{-- Panel: Indikator (RSI, Stoch RSI, MACD) --}}
@@ -341,6 +344,58 @@
                     <div style="position:relative; height:150px;">
                         <canvas id="foreignFlowChart"></canvas>
                     </div>
+                </div>
+            </div>
+
+            {{-- Panel: Transaksi Insider (daftar aksi Beli/Jual/Cross oleh insider perusahaan) --}}
+            <div id="panelInsider" class="tab-panel" style="display:none;">
+
+                <div style="display:flex; flex-wrap:wrap; align-items:end; gap:0.6rem; margin-bottom:0.8rem; padding:0.6rem 0.8rem; background:var(--panel-2); border:1px solid var(--border); border-radius:8px;">
+                    <div class="form-group" style="margin:0;">
+                        <label style="font-size:0.65rem;">Aksi</label>
+                        <select id="insiderActionFilter" style="font-size:0.78rem; padding:0.3rem 0.5rem;">
+                            <option value="">Semua Aksi</option>
+                            <option value="buy">Beli</option>
+                            <option value="sell">Jual</option>
+                            <option value="cross">Cross</option>
+                        </select>
+                    </div>
+
+                    <div style="display:flex; gap:0.8rem; margin-left:auto; font-size:0.72rem; color:var(--muted);">
+                        <span>Total Transaksi: <strong id="insiderTotalCount" style="color:var(--ink);">-</strong></span>
+                        <span>Total Beli: <strong id="insiderTotalBuy" style="color:#10b981;">-</strong></span>
+                        <span>Total Jual: <strong id="insiderTotalSell" style="color:#f43f5e;">-</strong></span>
+                    </div>
+
+                    <button type="button" class="btn btn-primary" id="insiderApplyBtn" style="padding:0.35rem 0.9rem; font-size:0.72rem;">Terapkan</button>
+                </div>
+
+                <div id="insiderLoading" style="display:none; text-align:center; color:var(--muted); font-size:0.8rem; padding:0.5rem;">Memuat data transaksi insider...</div>
+                <div id="insiderEmpty" style="display:none; text-align:center; color:var(--muted); font-size:0.8rem; padding:0.5rem;">Data transaksi insider tidak tersedia untuk saham ini.</div>
+
+                <div id="insiderTableWrap" style="display:none; overflow-x:auto; max-height:420px; overflow-y:auto;">
+                    <table style="width:100%; font-size:0.78rem; border-collapse:collapse;">
+                        <thead style="position:sticky; top:0; background:var(--panel); z-index:1;">
+                            <tr style="color:var(--muted); text-align:right;">
+                                <th style="text-align:left; padding:0.4rem 0.3rem;">Tanggal</th>
+                                <th style="text-align:left; padding:0.4rem 0.3rem;">Insider</th>
+                                <th style="text-align:center; padding:0.4rem 0.3rem;">Aksi</th>
+                                <th style="padding:0.4rem 0.3rem;">Harga</th>
+                                <th style="text-align:left; padding:0.4rem 0.3rem;">Broker</th>
+                                <th style="padding:0.4rem 0.3rem;">Perubahan (%)</th>
+                                <th style="padding:0.4rem 0.3rem;">Kepemilikan Saat Ini (%)</th>
+                                <th style="padding:0.4rem 0.3rem;">Kepemilikan Sebelumnya (%)</th>
+                                <th style="text-align:left; padding:0.4rem 0.3rem;">Nasionalitas</th>
+                            </tr>
+                        </thead>
+                        <tbody id="insiderTableBody"></tbody>
+                    </table>
+                </div>
+
+                <div style="display:flex; align-items:center; justify-content:flex-end; gap:0.6rem; margin-top:0.6rem;">
+                    <button type="button" class="btn btn-ghost" id="insiderPrevBtn" style="padding:0.3rem 0.7rem; font-size:0.72rem;">‹ Prev</button>
+                    <span id="insiderPageInfo" style="font-size:0.72rem; color:var(--muted);">-</span>
+                    <button type="button" class="btn btn-ghost" id="insiderNextBtn" style="padding:0.3rem 0.7rem; font-size:0.72rem;">Next ›</button>
                 </div>
             </div>
         </div>
@@ -596,6 +651,8 @@
         'frequency' => $p->frequency,
         'op_value' => $p->op_value,
         'value' => $p->value,
+        'op_non_regular_value' => $p->op_non_regular_value,
+        'non_regular_value' => $p->non_regular_value,
     ])->values()->toJson() !!};
 
     function applyPreset(id) {
@@ -608,6 +665,8 @@
         document.querySelector('[name="frequency"]').value = preset.frequency ? new Intl.NumberFormat('id-ID').format(preset.frequency) : '';
         document.querySelector('[name="op_value"]').value = preset.op_value || '=';
         document.querySelector('[name="value"]').value = preset.value ? new Intl.NumberFormat('id-ID').format(preset.value) : '';
+        document.querySelector('[name="op_non_regular_value"]').value = preset.op_non_regular_value || '=';
+        document.querySelector('[name="non_regular_value"]').value = preset.non_regular_value ? new Intl.NumberFormat('id-ID').format(preset.non_regular_value) : '';
 
         document.getElementById('filterForm').requestSubmit();
     }
@@ -623,6 +682,8 @@
         document.getElementById('presetFrequency').value = document.querySelector('[name="frequency"]').value;
         document.getElementById('presetOpValue').value = document.querySelector('[name="op_value"]').value;
         document.getElementById('presetValue').value = document.querySelector('[name="value"]').value;
+        document.getElementById('presetOpNonRegularValue').value = document.querySelector('[name="op_non_regular_value"]').value;
+        document.getElementById('presetNonRegularValue').value = document.querySelector('[name="non_regular_value"]').value;
 
         document.getElementById('savePresetForm').submit();
     }
@@ -1034,6 +1095,11 @@
                     loadBrokerSummary(code);
                 }
 
+                delete insiderLoadedForCode[code];
+                if (document.getElementById('panelInsider').style.display !== 'none') {
+                    loadInsiderTransactions(code);
+                }
+
                 if (flowOverlayActive) {
                     loadBrokerFlowOverlay();
                 }
@@ -1354,6 +1420,7 @@
             const target = this.dataset.panel;
             document.getElementById('panelIndicators').style.display = target === 'indicators' ? 'block' : 'none';
             document.getElementById('panelBroker').style.display = target === 'broker' ? 'block' : 'none';
+            document.getElementById('panelInsider').style.display = target === 'insider' ? 'block' : 'none';
 
             if (target === 'broker' && activeStockCode && !brokerLoadedForCode[activeStockCode]) {
                 loadBrokerSummary(activeStockCode);
@@ -1361,6 +1428,10 @@
 
             if (target === 'broker' && foreignFlowChartInstance) {
                 foreignFlowChartInstance.resize();
+            }
+
+            if (target === 'insider' && activeStockCode && !insiderLoadedForCode[activeStockCode]) {
+                loadInsiderTransactions(activeStockCode);
             }
         });
     });
@@ -1514,6 +1585,161 @@
         this.style.color = brokerAllDataActive ? '#0a0e1a' : '';
         this.style.borderColor = brokerAllDataActive ? 'var(--cyan)' : '';
         if (activeStockCode) loadBrokerSummary(activeStockCode);
+    });
+
+    // ══════════════════════════════════════════════════════════
+    // Transaksi Insider panel — konsumsi /insider-transaction/{code}
+    // ══════════════════════════════════════════════════════════
+    const insiderLoadedForCode = {};
+    let insiderCurrentPage = 1;
+    let insiderTotalPages = 1;
+    const insiderPageLimit = 10;
+
+    function formatSingkatInsider(num) {
+        num = Number(num) || 0;
+        const abs = Math.abs(num);
+        const sign = num < 0 ? '-' : '';
+        if (abs >= 1e12) return sign + (abs / 1e12).toFixed(2).replace('.', ',') + ' T';
+        if (abs >= 1e9)  return sign + (abs / 1e9).toFixed(2).replace('.', ',') + ' M';
+        if (abs >= 1e6)  return sign + (abs / 1e6).toFixed(2).replace('.', ',') + ' Jt';
+        if (abs >= 1e3)  return sign + (abs / 1e3).toFixed(0) + ' Rb';
+        return new Intl.NumberFormat('id-ID').format(num);
+    }
+
+    function insiderActionBadge(actionType) {
+        const type = String(actionType || '').toLowerCase();
+        if (type === 'buy') {
+            return `<span class="code-pill" style="background:rgba(16,185,129,0.15); color:#10b981; border-color:rgba(16,185,129,0.4);">BUY</span>`;
+        }
+        if (type === 'sell') {
+            return `<span class="code-pill" style="background:rgba(244,63,94,0.15); color:#f43f5e; border-color:rgba(244,63,94,0.4);">SELL</span>`;
+        }
+        if (type === 'cross') {
+            return `<span class="code-pill" style="background:rgba(234,179,8,0.15); color:#eab308; border-color:rgba(234,179,8,0.4);">CROSS</span>`;
+        }
+        return `<span class="code-pill">${type ? type.toUpperCase() : '-'}</span>`;
+    }
+
+    function renderInsiderTable(items) {
+        const tbody = document.getElementById('insiderTableBody');
+        tbody.innerHTML = '';
+
+        items.forEach((item) => {
+            // Nama field mengikuti response API stock.arjum.com/api/insider — dijaga
+            // toleran (fallback beberapa alias) kalau ada variasi penamaan dari provider.
+            const price = item.price ?? item.harga ?? 0;
+            const changeVal = item.change_value ?? item.perubahan_value ?? null;
+            const changePct = item.change_percentage ?? item.perubahan_percentage ?? item.percentage_change ?? null;
+            const currentVal = item.current_value ?? 0;
+            const currentPct = item.current_percentage ?? item.current_pct ?? null;
+            const prevVal = item.previous_value ?? 0;
+            const prevPct = item.previous_percentage ?? null;
+            const broker = item.broker ?? item.broker_code ?? '-';
+
+            const changeText = (changeVal !== null || changePct !== null)
+                ? `${formatSingkatInsider(changeVal ?? 0)}${changePct !== null ? ' (' + (Number(changePct) >= 0 ? '+' : '') + Number(changePct).toFixed(2) + '%)' : ''}`
+                : '-';
+            const changeColor = (Number(changeVal ?? changePct ?? 0) > 0) ? '#10b981' : (Number(changeVal ?? changePct ?? 0) < 0 ? '#f43f5e' : 'var(--muted)');
+
+            const tr = document.createElement('tr');
+            tr.style.borderTop = '1px solid var(--border)';
+            tr.innerHTML = `
+                <td style="text-align:left; padding:0.4rem 0.3rem; color:var(--muted); white-space:nowrap;">${item.date ?? '-'}</td>
+                <td style="text-align:left; padding:0.4rem 0.3rem; font-weight:600;">${item.name ?? '-'}</td>
+                <td style="text-align:center; padding:0.4rem 0.3rem;">${insiderActionBadge(item.action_type)}</td>
+                <td style="text-align:right; padding:0.4rem 0.3rem;">${price ? 'Rp ' + new Intl.NumberFormat('id-ID').format(price) : '-'}</td>
+                <td style="text-align:left; padding:0.4rem 0.3rem;"><span class="code-pill">${broker}</span></td>
+                <td style="text-align:right; padding:0.4rem 0.3rem; color:${changeColor};">${changeText}</td>
+                <td style="text-align:right; padding:0.4rem 0.3rem;">${formatSingkatInsider(currentVal)}${currentPct !== null ? ' (' + Number(currentPct).toFixed(2) + '%)' : ''}</td>
+                <td style="text-align:right; padding:0.4rem 0.3rem; color:var(--muted);">${formatSingkatInsider(prevVal)}${prevPct !== null ? ' (' + Number(prevPct).toFixed(2) + '%)' : ''}</td>
+                <td style="text-align:left; padding:0.4rem 0.3rem; color:var(--muted);">${item.nationality ?? '-'}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function loadInsiderTransactions(code, page = 1) {
+        if (!code) return;
+
+        const loadingEl = document.getElementById('insiderLoading');
+        const emptyEl = document.getElementById('insiderEmpty');
+        const wrapEl = document.getElementById('insiderTableWrap');
+
+        loadingEl.style.display = 'block';
+        emptyEl.style.display = 'none';
+        wrapEl.style.display = 'none';
+
+        const actionType = document.getElementById('insiderActionFilter').value;
+
+        const params = new URLSearchParams();
+        params.set('page', page);
+        params.set('limit', insiderPageLimit);
+        if (actionType) params.set('action_type', actionType);
+
+        fetch(`/insider-transaction/${code}?${params.toString()}`, { headers: { 'Accept': 'application/json' } })
+            .then(res => {
+                if (!res.ok) throw new Error('not ok');
+                return res.json();
+            })
+            .then(data => {
+                loadingEl.style.display = 'none';
+                insiderLoadedForCode[code] = true;
+
+                const items = data.items || [];
+
+                if (items.length === 0) {
+                    emptyEl.style.display = 'block';
+                    document.getElementById('insiderTotalCount').textContent = '0';
+                    document.getElementById('insiderTotalBuy').textContent = '0';
+                    document.getElementById('insiderTotalSell').textContent = '0';
+                    document.getElementById('insiderPageInfo').textContent = '-';
+                    return;
+                }
+
+                insiderCurrentPage = data.page || page;
+                insiderTotalPages = data.total_pages || 1;
+
+                const totalBuy = items.filter(it => String(it.action_type).toLowerCase() === 'buy').length;
+                const totalSell = items.filter(it => String(it.action_type).toLowerCase() === 'sell').length;
+
+                document.getElementById('insiderTotalCount').textContent = data.total ?? items.length;
+                document.getElementById('insiderTotalBuy').textContent = totalBuy;
+                document.getElementById('insiderTotalSell').textContent = totalSell;
+                document.getElementById('insiderPageInfo').textContent = `Halaman ${insiderCurrentPage} dari ${insiderTotalPages}`;
+
+                document.getElementById('insiderPrevBtn').disabled = insiderCurrentPage <= 1;
+                document.getElementById('insiderNextBtn').disabled = insiderCurrentPage >= insiderTotalPages;
+
+                renderInsiderTable(items);
+                wrapEl.style.display = 'block';
+            })
+            .catch(() => {
+                loadingEl.style.display = 'none';
+                emptyEl.textContent = 'Gagal memuat data transaksi insider. Coba lagi.';
+                emptyEl.style.display = 'block';
+            });
+    }
+
+    document.getElementById('insiderApplyBtn').addEventListener('click', function () {
+        insiderCurrentPage = 1;
+        if (activeStockCode) loadInsiderTransactions(activeStockCode, 1);
+    });
+
+    document.getElementById('insiderActionFilter').addEventListener('change', function () {
+        insiderCurrentPage = 1;
+        if (activeStockCode) loadInsiderTransactions(activeStockCode, 1);
+    });
+
+    document.getElementById('insiderPrevBtn').addEventListener('click', function () {
+        if (activeStockCode && insiderCurrentPage > 1) {
+            loadInsiderTransactions(activeStockCode, insiderCurrentPage - 1);
+        }
+    });
+
+    document.getElementById('insiderNextBtn').addEventListener('click', function () {
+        if (activeStockCode && insiderCurrentPage < insiderTotalPages) {
+            loadInsiderTransactions(activeStockCode, insiderCurrentPage + 1);
+        }
     });
 
     // ══════════════════════════════════════════════════════════
