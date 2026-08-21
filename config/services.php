@@ -56,4 +56,21 @@ return [
         'api_key'       => env('BROKER_API_KEY'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Insider Transaction API (stock.arjum.com)
+    |--------------------------------------------------------------------------
+    |
+    | Pakai provider & API key yang SAMA dengan Broker Summary (BROKER_API_KEY),
+    | cuma base URL endpoint-nya beda. Kalau nanti provider ganti path/domain
+    | endpoint insider secara terpisah, cukup override lewat INSIDER_API_BASE
+    | di .env — tidak perlu sentuh kode InsiderTransactionService/Controller.
+    |
+    */
+
+    'insider' => [
+    'base_url' => env('INSIDER_API_BASE', 'https://stock.arjum.com/api/insider'),
+    'api_key'  => env('BROKER_API_KEY'),
+],
+
 ];
