@@ -1606,6 +1606,17 @@
         return new Intl.NumberFormat('id-ID').format(num);
     }
 
+    // API stock.arjum.com/api/insiders mengirim angka sebagai STRING dengan koma
+    // pemisah ribuan dan kadang tanda +/- di depan (contoh: "324,100", "+160,900").
+    // parseFloat toleran terhadap tanda +/- di depan, cukup buang koma dulu.
+    function toNumInsider(val) {
+        if (val === null || val === undefined || val === '') return null;
+        if (typeof val === 'number') return val;
+        const cleaned = String(val).replace(/,/g, '');
+        const num = parseFloat(cleaned);
+        return isNaN(num) ? null : num;
+    }
+
     function insiderActionBadge(actionType) {
         const type = String(actionType || '').toLowerCase();
         if (type === 'buy') {
@@ -1625,33 +1636,38 @@
         tbody.innerHTML = '';
 
         items.forEach((item) => {
-            // Nama field mengikuti response API stock.arjum.com/api/insider — dijaga
-            // toleran (fallback beberapa alias) kalau ada variasi penamaan dari provider.
-            const price = item.price ?? item.harga ?? 0;
-            const changeVal = item.change_value ?? item.perubahan_value ?? null;
-            const changePct = item.change_percentage ?? item.perubahan_percentage ?? item.percentage_change ?? null;
-            const currentVal = item.current_value ?? 0;
-            const currentPct = item.current_percentage ?? item.current_pct ?? null;
-            const prevVal = item.previous_value ?? 0;
-            const prevPct = item.previous_percentage ?? null;
-            const broker = item.broker ?? item.broker_code ?? '-';
+            // Nama field PERSIS sesuai response resmi API stock.arjum.com/api/insiders.
+            const price = toNumInsider(item.price_formatted);
+            const currentVal = toNumInsider(item.current_value);
+            const currentPct = toNumInsider(item.current_percentage);
+            const prevVal = toNumInsider(item.previous_value);
+            const prevPct = toNumInsider(item.previous_percentage);
+            const changeVal = toNumInsider(item.changes_value);
+            const changePct = toNumInsider(item.changes_percentage);
+            const broker = item.broker_code && item.broker_code.trim() !== '' ? item.broker_code : null;
+            const badges = Array.isArray(item.badges) && item.badges.length > 0 ? item.badges.join(', ') : null;
 
             const changeText = (changeVal !== null || changePct !== null)
-                ? `${formatSingkatInsider(changeVal ?? 0)}${changePct !== null ? ' (' + (Number(changePct) >= 0 ? '+' : '') + Number(changePct).toFixed(2) + '%)' : ''}`
+                ? `${changeVal !== null ? formatSingkatInsider(changeVal) : ''}${changePct !== null ? ' (' + (changePct >= 0 ? '+' : '') + changePct.toFixed(2) + '%)' : ''}`
                 : '-';
-            const changeColor = (Number(changeVal ?? changePct ?? 0) > 0) ? '#10b981' : (Number(changeVal ?? changePct ?? 0) < 0 ? '#f43f5e' : 'var(--muted)');
+            const changeRef = changeVal ?? changePct ?? 0;
+            const changeColor = changeRef > 0 ? '#10b981' : (changeRef < 0 ? '#f43f5e' : 'var(--muted)');
+
+            const nameWithBadge = badges
+                ? `${item.name ?? '-'}<br><span style="font-size:0.68rem; font-weight:400; color:var(--muted);">${badges}</span>`
+                : (item.name ?? '-');
 
             const tr = document.createElement('tr');
             tr.style.borderTop = '1px solid var(--border)';
             tr.innerHTML = `
                 <td style="text-align:left; padding:0.4rem 0.3rem; color:var(--muted); white-space:nowrap;">${item.date ?? '-'}</td>
-                <td style="text-align:left; padding:0.4rem 0.3rem; font-weight:600;">${item.name ?? '-'}</td>
+                <td style="text-align:left; padding:0.4rem 0.3rem; font-weight:600;">${nameWithBadge}</td>
                 <td style="text-align:center; padding:0.4rem 0.3rem;">${insiderActionBadge(item.action_type)}</td>
                 <td style="text-align:right; padding:0.4rem 0.3rem;">${price ? 'Rp ' + new Intl.NumberFormat('id-ID').format(price) : '-'}</td>
-                <td style="text-align:left; padding:0.4rem 0.3rem;"><span class="code-pill">${broker}</span></td>
+                <td style="text-align:left; padding:0.4rem 0.3rem;">${broker ? '<span class="code-pill">' + broker + '</span>' : '-'}</td>
                 <td style="text-align:right; padding:0.4rem 0.3rem; color:${changeColor};">${changeText}</td>
-                <td style="text-align:right; padding:0.4rem 0.3rem;">${formatSingkatInsider(currentVal)}${currentPct !== null ? ' (' + Number(currentPct).toFixed(2) + '%)' : ''}</td>
-                <td style="text-align:right; padding:0.4rem 0.3rem; color:var(--muted);">${formatSingkatInsider(prevVal)}${prevPct !== null ? ' (' + Number(prevPct).toFixed(2) + '%)' : ''}</td>
+                <td style="text-align:right; padding:0.4rem 0.3rem;">${currentVal !== null ? formatSingkatInsider(currentVal) : '-'}${currentPct !== null ? ' (' + currentPct.toFixed(2) + '%)' : ''}</td>
+                <td style="text-align:right; padding:0.4rem 0.3rem; color:var(--muted);">${prevVal !== null ? formatSingkatInsider(prevVal) : '-'}${prevPct !== null ? ' (' + prevPct.toFixed(2) + '%)' : ''}</td>
                 <td style="text-align:left; padding:0.4rem 0.3rem; color:var(--muted);">${item.nationality ?? '-'}</td>
             `;
             tbody.appendChild(tr);
