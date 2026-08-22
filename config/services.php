@@ -69,7 +69,7 @@ return [
     */
 
     'insider' => [
-    'base_url' => env('INSIDER_API_BASE', 'https://stock.arjum.com/api/insider'),
+    'base_url' => env('INSIDER_API_BASE', 'https://stock.arjum.com/api/insiders'),
     'api_key'  => env('BROKER_API_KEY'),
 ],
 
