@@ -6,13 +6,21 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    /**
+     * Matikan pembungkusan otomatis migration ini dalam 1 DB transaction.
+     *
+     * Kenapa: koneksi production pakai Neon Postgres lewat connection pooler
+     * (PgBouncer, terlihat dari host "...-pooler..."). Kombinasi pooler +
+     * transaksi otomatis Laravel untuk migration sering bikin error rancu
+     * "current transaction is aborted" padahal statement-nya sendiri valid
+     * dan kolomnya belum ada. Menonaktifkan wrapping ini adalah solusi resmi
+     * Laravel untuk kasus seperti ini (dan juga wajib untuk DDL semacam
+     * CREATE INDEX CONCURRENTLY di Postgres).
+     */
+    public $withinTransaction = false;
+
     public function up(): void
     {
-        // Idempotent: dicek per-kolom dulu sebelum ditambahkan. Ini penting khusus
-        // untuk Postgres (Neon) — kalau salah satu ALTER TABLE gagal (misal kolom
-        // sudah ada dari percobaan migrate sebelumnya), seluruh transaksi migration
-        // ini langsung "aborted" dan statement berikutnya ikut gagal semua.
-        // Dengan pengecekan ini, migration aman dijalankan ulang kapan pun.
         Schema::table('saved_filters', function (Blueprint $table) {
             if (!Schema::hasColumn('saved_filters', 'op_non_regular_value')) {
                 $table->string('op_non_regular_value', 2)->default('=')->after('value');
