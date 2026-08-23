@@ -1220,7 +1220,11 @@
         if (!clickChartInstance || !currentChartDates || currentChartDates.length === 0) return;
 
         const minDateISO = currentChartDates[0];
-        const limit = 100;
+        // PENTING: API stock.arjum.com ternyata menolak (502) kalau limit terlalu
+        // besar (limit=100 gagal). limit=10 sudah terbukti jalan (dipakai juga di
+        // tabel Transaksi Insider), makanya di sini page cap dinaikkan supaya
+        // cakupan datanya tetap luas meski tiap halaman cuma 10 item.
+        const limit = 10;
         let page = 1;
         let totalPages = 1;
         let collected = [];
@@ -1239,7 +1243,7 @@
                 const oldestOnPage = items.length ? items[items.length - 1].date : null;
                 if (oldestOnPage && oldestOnPage < minDateISO) break;
                 page++;
-            } while (page <= totalPages && page <= 5); // cap 5 halaman (maks 500 item) buat jaga performa
+            } while (page <= totalPages && page <= 20); // cap 20 halaman (maks 200 item) buat jaga performa
         } catch (e) {
             return; // gagal ambil data marker: chart tetap tampil normal tanpa titik insider
         }
