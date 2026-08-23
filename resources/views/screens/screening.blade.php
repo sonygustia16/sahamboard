@@ -221,6 +221,14 @@
         <div id="chartLoading" style="display:none; text-align:center; color:var(--muted); font-size:0.8rem; padding:0.5rem;">Memuat data...</div>
         <div id="chartEmpty" style="display:none; text-align:center; color:var(--muted); font-size:0.8rem; padding:0.5rem;">Belum ada data historis untuk saham ini di rentang waktu tersebut.</div>
 
+        {{-- Keterangan titik Transaksi Insider di chart Value NR di atas --}}
+        <div id="insiderMarkerLegend" style="display:none; align-items:center; gap:1rem; margin-top:0.4rem; font-size:0.7rem; color:var(--muted);">
+            <span>Transaksi Insider:</span>
+            <span><span style="color:#10b981;">●</span> Beli</span>
+            <span><span style="color:#f43f5e;">●</span> Jual</span>
+            <span><span style="color:#eab308;">●</span> Cross</span>
+        </div>
+
         {{-- ══════════════════════════════════════════════════════════
              Broker Flow Overlay — menyatu langsung di chart Value NR
              di atas (bukan chart/tab terpisah). Toggle ON/OFF + legend
@@ -1080,12 +1088,14 @@
                     document.getElementById('signalBadge').style.display = 'none';
                     document.getElementById('indicatorPanels').style.display = 'none';
                     document.getElementById('flowLegendChips').style.display = 'none';
+                    document.getElementById('insiderMarkerLegend').style.display = 'none';
                     return;
                 }
 
                 currentChartDates = data.dates || []; // tanggal mentah, dipakai align Broker Flow overlay
 
                 renderClickChart(data.labels, data.values, data.closes, data.non_regular_values);
+                fetchAndPlotInsiderMarkers(code);
                 updateSignalBadge(data.values, data.closes);
                 document.getElementById('indicatorPanels').style.display = 'block';
                 renderIndicators(data.labels, data.rsi, data.stoch_k, data.stoch_d, data.macd_line, data.macd_signal, data.macd_hist, data.foreign_buy, data.foreign_sell, data.closes);
@@ -1173,6 +1183,126 @@
     let currentChartValues = [];
     let currentChartCloses = [];
     let currentChartNrv = [];
+
+    // ══════════════════════════════════════════════════════════
+    // Marker Transaksi Insider di chart Value NR
+    // ══════════════════════════════════════════════════════════
+    // { [dataIndex]: [{name, currentPct, nationality, actionType}, ...] }
+    // dipakai renderCustomTooltip() untuk menyusun detail saat hover titik insider.
+    let insiderMarkersByIndex = {};
+
+    const MONTH_ABBR_EN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+    // Format tanggal insider "2026-05-19" -> "19 May 26", konsisten dengan format
+    // label chart (Carbon 'd M y' di StockFilterController) supaya enak dibaca.
+    function formatInsiderDate(isoDate) {
+        if (!isoDate) return '-';
+        const parts = String(isoDate).split('-');
+        if (parts.length !== 3) return isoDate;
+        const [y, m, d] = parts;
+        const monthIdx = parseInt(m, 10) - 1;
+        if (monthIdx < 0 || monthIdx > 11) return isoDate;
+        const dd = d.padStart(2, '0');
+        const yy = y.slice(-2);
+        return `${dd} ${MONTH_ABBR_EN[monthIdx]} ${yy}`;
+    }
+
+    /**
+     * Ambil transaksi insider yang tanggalnya berada dalam rentang chart yang
+     * sedang tampil, lalu tempelkan sebagai titik (marker) di garis Value NR:
+     * hijau = buy, merah = sell, kuning = cross. Dipanggil setiap kali chart
+     * baru selesai di-render (ganti saham / ganti rentang tanggal).
+     */
+    async function fetchAndPlotInsiderMarkers(code) {
+        insiderMarkersByIndex = {};
+        document.getElementById('insiderMarkerLegend').style.display = 'none';
+
+        if (!clickChartInstance || !currentChartDates || currentChartDates.length === 0) return;
+
+        const minDateISO = currentChartDates[0];
+        const limit = 100;
+        let page = 1;
+        let totalPages = 1;
+        let collected = [];
+
+        try {
+            do {
+                const res = await fetch(`/insider-transaction/${code}?page=${page}&limit=${limit}`, { headers: { 'Accept': 'application/json' } });
+                if (!res.ok) break;
+                const data = await res.json();
+                const items = data.items || [];
+                collected = collected.concat(items);
+                totalPages = data.total_pages || 1;
+
+                // Item terurut terbaru dulu — begitu item TERTUA di halaman ini sudah
+                // lebih tua dari tanggal awal chart, tidak perlu lanjut ke halaman berikutnya.
+                const oldestOnPage = items.length ? items[items.length - 1].date : null;
+                if (oldestOnPage && oldestOnPage < minDateISO) break;
+                page++;
+            } while (page <= totalPages && page <= 5); // cap 5 halaman (maks 500 item) buat jaga performa
+        } catch (e) {
+            return; // gagal ambil data marker: chart tetap tampil normal tanpa titik insider
+        }
+
+        if (!clickChartInstance || collected.length === 0) return;
+
+        const n = currentChartValues.length;
+        const markerData = new Array(n).fill(null);
+        const pointRadiusArr = new Array(n).fill(0);
+        const pointColorArr = new Array(n).fill('transparent');
+        let anyMarker = false;
+
+        collected.forEach(item => {
+            const idx = currentChartDates.indexOf(item.date);
+            if (idx === -1) return;
+
+            const actionType = String(item.action_type || '').toLowerCase();
+            const currentValRaw = item.current_value;
+            const currentVal = (currentValRaw !== undefined && currentValRaw !== null && currentValRaw !== '')
+                ? parseFloat(String(currentValRaw).replace(/,/g, ''))
+                : null;
+            const broker = (item.broker_code && String(item.broker_code).trim() !== '') ? item.broker_code : null;
+
+            if (!insiderMarkersByIndex[idx]) insiderMarkersByIndex[idx] = [];
+            insiderMarkersByIndex[idx].push({
+                name: item.name || '-',
+                currentVal: isNaN(currentVal) ? null : currentVal,
+                nationality: item.nationality || '-',
+                broker,
+                actionType,
+            });
+
+            markerData[idx] = currentChartValues[idx];
+            pointRadiusArr[idx] = 7;
+            anyMarker = true;
+
+            // Warna titik: hijau kalau mayoritas buy, merah kalau mayoritas sell,
+            // kuning untuk cross atau kalau campuran/seimbang di tanggal yang sama.
+            const entries = insiderMarkersByIndex[idx];
+            const buyCount = entries.filter(e => e.actionType === 'buy').length;
+            const sellCount = entries.filter(e => e.actionType === 'sell').length;
+            pointColorArr[idx] = buyCount > sellCount ? '#10b981' : (sellCount > buyCount ? '#f43f5e' : '#eab308');
+        });
+
+        if (!anyMarker || !clickChartInstance) return;
+
+        clickChartInstance.data.datasets = clickChartInstance.data.datasets.filter(ds => ds.label !== 'Transaksi Insider');
+        clickChartInstance.data.datasets.push({
+            label: 'Transaksi Insider',
+            data: markerData,
+            showLine: false,
+            spanGaps: false,
+            pointRadius: pointRadiusArr,
+            pointHoverRadius: pointRadiusArr.map(r => r ? r + 2 : 0),
+            pointBackgroundColor: pointColorArr,
+            pointBorderColor: '#fff',
+            pointBorderWidth: 1.5,
+            yAxisID: 'yValue',
+            order: 10,
+        });
+        clickChartInstance.update();
+        document.getElementById('insiderMarkerLegend').style.display = 'flex';
+    }
 
     function renderClickChart(labels, values, closes, nrvValues) {
         currentChartValues = values;
@@ -1282,7 +1412,10 @@
                             font: { size: 11 },
                             filter: function (legendItem, chartData) {
                                 const ds = chartData.datasets[legendItem.datasetIndex];
-                                return !ds || !ds.brokerCode; // sembunyikan dataset broker dari legend atas
+                                if (!ds) return true;
+                                if (ds.brokerCode) return false; // sembunyikan dataset broker dari legend atas
+                                if (ds.label === 'Transaksi Insider') return false; // punya caption sendiri di bawah chart
+                                return true;
                             }
                         }
                     },
@@ -1343,8 +1476,19 @@
             try { if (navigator.vibrate) navigator.vibrate(12); } catch (e) {}
         }
 
-        const lines = tooltip.dataPoints.map(dp => {
+        const lines = tooltip.dataPoints.flatMap(dp => {
             const ds = dp.dataset;
+
+            if (ds.label === 'Transaksi Insider') {
+                const entries = insiderMarkersByIndex[dp.dataIndex] || [];
+                return entries.map(e => {
+                    const dotColor = e.actionType === 'buy' ? '#10b981' : (e.actionType === 'sell' ? '#f43f5e' : '#eab308');
+                    const valText = e.currentVal !== null ? formatSingkat(e.currentVal) : '-';
+                    const brokerText = e.broker ? ` · Broker: ${e.broker}` : '';
+                    return `<span style="color:${dotColor};">●</span> ${e.name} — Kepemilikan: ${valText} (${e.nationality})${brokerText}`;
+                });
+            }
+
             let label;
             if (ds.brokerCode) {
                 label = ds.brokerCode + ': ' + formatFlowValue(dp.raw);
@@ -1356,7 +1500,7 @@
                 label = 'Value NR: Rp ' + formatSingkat(dp.raw);
             }
             const dotColor = ds.brokerCode ? (dp.raw >= 0 ? '#10b981' : '#f43f5e') : ds.borderColor;
-            return `<span style="color:${dotColor};">●</span> ${label}`;
+            return [`<span style="color:${dotColor};">●</span> ${label}`];
         });
 
         let footerLine = '';
@@ -1660,7 +1804,7 @@
             const tr = document.createElement('tr');
             tr.style.borderTop = '1px solid var(--border)';
             tr.innerHTML = `
-                <td style="text-align:left; padding:0.4rem 0.3rem; color:var(--muted); white-space:nowrap;">${item.date ?? '-'}</td>
+                <td style="text-align:left; padding:0.4rem 0.3rem; color:var(--muted); white-space:nowrap;">${formatInsiderDate(item.date)}</td>
                 <td style="text-align:left; padding:0.4rem 0.3rem; font-weight:600;">${nameWithBadge}</td>
                 <td style="text-align:center; padding:0.4rem 0.3rem;">${insiderActionBadge(item.action_type)}</td>
                 <td style="text-align:right; padding:0.4rem 0.3rem;">${price ? 'Rp ' + new Intl.NumberFormat('id-ID').format(price) : '-'}</td>
