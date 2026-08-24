@@ -10,7 +10,12 @@
 @section('content')
 
     <div class="glass-card">
-        <h3><span class="accent-bar"></span>Kriteria Pencarian</h3>
+        <h3 id="kriteriaPencarianToggle" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between; user-select:none;" onclick="toggleKriteriaPencarian()">
+            <span><span class="accent-bar"></span>Kriteria Pencarian</span>
+            <span id="kriteriaPencarianChevron" style="font-size:0.75rem; color:var(--muted); transition:transform 0.2s;">▼</span>
+        </h3>
+
+        <div id="kriteriaPencarianBody">
 
         {{-- Preset filter tersimpan — klik untuk langsung isi & jalankan filter --}}
         @if($savedFilters->count() > 0)
@@ -76,6 +81,17 @@
                         <input type="text" class="rupiah-input" name="value" value="{{ $filterValue }}">
                     </div>
                 </div>
+                <div class="form-group">
+                    <label>Non-Regular Value</label>
+                    <div class="input-group">
+                        <select name="op_non_regular_value">
+                            <option value="=" @selected($opNonRegularValue == '=')>=</option>
+                            <option value=">" @selected($opNonRegularValue == '>')>&gt;</option>
+                            <option value="<" @selected($opNonRegularValue == '<')>&lt;</option>
+                        </select>
+                        <input type="text" class="rupiah-input" name="non_regular_value" value="{{ $filterNonRegularValue }}">
+                    </div>
+                </div>
             </div>
 
             <div class="action-row">
@@ -84,6 +100,7 @@
                 <button type="button" class="btn btn-ghost" onclick="openSavePresetPrompt()">💾 Simpan sebagai Preset</button>
             </div>
         </form>
+        </div>
     </div>
 
     {{-- Form tersembunyi buat submit preset baru --}}
@@ -96,6 +113,8 @@
         <input type="hidden" name="frequency" id="presetFrequency">
         <input type="hidden" name="op_value" id="presetOpValue">
         <input type="hidden" name="value" id="presetValue">
+        <input type="hidden" name="op_non_regular_value" id="presetOpNonRegularValue">
+        <input type="hidden" name="non_regular_value" id="presetNonRegularValue">
     </form>
 
     {{-- Chart card — muncul begitu klik kode saham di tabel --}}
@@ -105,50 +124,12 @@
                 <span id="chartStockCode" style="font-family:var(--mono); font-weight:700; font-size:1.1rem; color:var(--ink);"></span>
                 <span style="color:var(--muted); font-size:0.8rem; margin-left:0.5rem;">Tren Value Transaksi</span>
             </div>
-            <div class="date-range-bar">
-                <button type="button" class="drb-nav" id="drbPrev" title="Rentang sebelumnya">&lsaquo;</button>
-                <button type="button" class="drb-display" id="drbDisplay" onclick="openDateRangeModal()">
-                    <span id="drbLabel">Last 7 Days</span>
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/>
-                        <line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-                    </svg>
-                </button>
-                <button type="button" class="drb-nav" id="drbNext" title="Rentang berikutnya">&rsaquo;</button>
-            </div>
-        </div>
-
-        {{-- ══ Modal Pilih Rentang Tanggal (gaya Stockbit) ══ --}}
-        <div id="dateRangeModalOverlay" class="modal-overlay" style="display:none;" onclick="closeDateRangeModal(event)">
-            <div class="modal-box modal-box-small" onclick="event.stopPropagation();">
-                <div class="modal-header">
-                    <span style="font-weight:700;">Select Date</span>
-                    <button type="button" class="modal-close" onclick="closeDateRangeModal()">✕</button>
-                </div>
-                <div class="modal-body">
-                    <div class="drb-preset-list" id="drbPresetList"></div>
-                    <div class="drb-custom-row">
-                        <div>
-                            <label>Start</label>
-                            <div class="drb-date-stepper">
-                                <button type="button" onclick="stepCustomDate('start',-1)">&lsaquo;</button>
-                                <span id="drbCustomStart">-</span>
-                                <button type="button" onclick="stepCustomDate('start',1)">&rsaquo;</button>
-                            </div>
-                        </div>
-                        <div>
-                            <label>End</label>
-                            <div class="drb-date-stepper">
-                                <button type="button" onclick="stepCustomDate('end',-1)">&lsaquo;</button>
-                                <span id="drbCustomEnd">-</span>
-                                <button type="button" onclick="stepCustomDate('end',1)">&rsaquo;</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-primary" style="width:100%;" onclick="applyDateRange()">Terapkan</button>
-                </div>
+            <div id="timeframeButtons" style="display:flex; gap:0.3rem;">
+                <button type="button" class="btn btn-ghost tf-btn" data-tf="7d" style="padding:0.3rem 0.7rem; font-size:0.75rem;">7H</button>
+                <button type="button" class="btn btn-ghost tf-btn active" data-tf="1m" style="padding:0.3rem 0.7rem; font-size:0.75rem;">1M</button>
+                <button type="button" class="btn btn-ghost tf-btn" data-tf="3m" style="padding:0.3rem 0.7rem; font-size:0.75rem;">3M</button>
+                <button type="button" class="btn btn-ghost tf-btn" data-tf="6m" style="padding:0.3rem 0.7rem; font-size:0.75rem;">6M</button>
+                <button type="button" class="btn btn-ghost tf-btn" data-tf="1y" style="padding:0.3rem 0.7rem; font-size:0.75rem;">1Y</button>
             </div>
         </div>
 
@@ -204,7 +185,6 @@
                     <th>Change</th>
                     <th>Frequency</th>
                     <th>Value</th>
-                    <th>Non-Regular Value</th>
                 </tr>
             </thead>
             <tbody>
@@ -254,10 +234,9 @@
                         <td class="text-center {{ $changeClass }}">{{ $changeText }}</td>
                         <td class="text-right">{{ number_format($row->frequency, 0, ',', '.') }}</td>
                         <td class="text-right">{{ number_format($row->value, 0, ',', '.') }}</td>
-                        <td class="text-right">{{ number_format($row->non_regular_value, 0, ',', '.') }}</td>
                     </tr>
                 @empty
-                    <tr class="empty-row"><td colspan="10">Data tidak ditemukan</td></tr>
+                    <tr class="empty-row"><td colspan="9">Data tidak ditemukan</td></tr>
                 @endforelse
             </tbody>
         </table>
@@ -323,6 +302,8 @@
         'frequency' => $p->frequency,
         'op_value' => $p->op_value,
         'value' => $p->value,
+        'op_non_regular_value' => $p->op_non_regular_value,
+        'non_regular_value' => $p->non_regular_value,
     ])->values()->toJson() !!};
 
     function applyPreset(id) {
@@ -335,6 +316,8 @@
         document.querySelector('[name="frequency"]').value = preset.frequency ? new Intl.NumberFormat('id-ID').format(preset.frequency) : '';
         document.querySelector('[name="op_value"]').value = preset.op_value || '=';
         document.querySelector('[name="value"]').value = preset.value ? new Intl.NumberFormat('id-ID').format(preset.value) : '';
+        document.querySelector('[name="op_non_regular_value"]').value = preset.op_non_regular_value || '=';
+        document.querySelector('[name="non_regular_value"]').value = preset.non_regular_value ? new Intl.NumberFormat('id-ID').format(preset.non_regular_value) : '';
 
         document.getElementById('filterForm').requestSubmit();
     }
@@ -350,9 +333,38 @@
         document.getElementById('presetFrequency').value = document.querySelector('[name="frequency"]').value;
         document.getElementById('presetOpValue').value = document.querySelector('[name="op_value"]').value;
         document.getElementById('presetValue').value = document.querySelector('[name="value"]').value;
+        document.getElementById('presetOpNonRegularValue').value = document.querySelector('[name="op_non_regular_value"]').value;
+        document.getElementById('presetNonRegularValue').value = document.querySelector('[name="non_regular_value"]').value;
 
         document.getElementById('savePresetForm').submit();
     }
+
+    // ══ Collapsible "Kriteria Pencarian" — sama seperti di halaman Screening ══
+    function toggleKriteriaPencarian() {
+        const body = document.getElementById('kriteriaPencarianBody');
+        const chevron = document.getElementById('kriteriaPencarianChevron');
+        const collapsed = body.classList.toggle('collapsed');
+        chevron.classList.toggle('collapsed', collapsed);
+        try {
+            localStorage.setItem('sahamboard_kriteria_collapsed', collapsed ? '1' : '0');
+        } catch (e) { /* localStorage tidak tersedia, abaikan */ }
+    }
+
+    // Auto-collapse kalau sebelumnya user pernah collapse, ATAU kalau sudah
+    // ada hasil pencarian aktif (biar layar hemat begitu hasil muncul).
+    (function initKriteriaPencarianState() {
+        const isSearchingNow = {{ $isSearching ? 'true' : 'false' }};
+        let shouldCollapse = isSearchingNow;
+        try {
+            const saved = localStorage.getItem('sahamboard_kriteria_collapsed');
+            if (saved !== null) shouldCollapse = saved === '1';
+        } catch (e) { /* abaikan */ }
+
+        if (shouldCollapse) {
+            document.getElementById('kriteriaPencarianBody').classList.add('collapsed');
+            document.getElementById('kriteriaPencarianChevron').classList.add('collapsed');
+        }
+    })();
 
     const inputs = document.querySelectorAll('.rupiah-input');
     inputs.forEach(input => {
@@ -518,131 +530,7 @@
         });
     }
     let activeStockCode = null;
-
-    // ══ Date Range Picker (gaya Stockbit) ══
-    const DATE_PRESETS = [
-        { key: 'latest', label: 'Latest' },
-        { key: 'prev_day', label: 'Previous Day' },
-        { key: '7d', label: 'Last 7 Days' },
-        { key: 'this_month', label: 'This Month' },
-        { key: 'prev_month', label: 'Previous Month' },
-        { key: '1m', label: 'Last 1 Month' },
-        { key: '3m', label: 'Last 3 Months' },
-        { key: '6m', label: 'Last 6 Months' },
-        { key: 'ytd', label: 'Year to Date' },
-        { key: '1y', label: 'Last 1 Year' },
-    ];
-
-    let selectedPreset = '7d';
-    let customStart = null, customEnd = null;
-    let activeRangeStart = null, activeRangeEnd = null;
-
-    function fmtDate(d) {
-        return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' });
-    }
-    function toISO(d) { return d.toISOString().slice(0, 10); }
-
-    function computeRangeFromPreset(key, refEnd) {
-        const end = new Date(refEnd);
-        let start = new Date(refEnd);
-        switch (key) {
-            case 'latest': break;
-            case 'prev_day': start.setDate(start.getDate() - 1); end.setDate(end.getDate() - 1); break;
-            case '7d': start.setDate(start.getDate() - 7); break;
-            case 'this_month': start = new Date(end.getFullYear(), end.getMonth(), 1); break;
-            case 'prev_month':
-                start = new Date(end.getFullYear(), end.getMonth() - 1, 1);
-                end.setTime(new Date(end.getFullYear(), end.getMonth(), 0).getTime());
-                break;
-            case '1m': start.setMonth(start.getMonth() - 1); break;
-            case '3m': start.setMonth(start.getMonth() - 3); break;
-            case '6m': start.setMonth(start.getMonth() - 6); break;
-            case 'ytd': start = new Date(end.getFullYear(), 0, 1); break;
-            case '1y': start.setFullYear(start.getFullYear() - 1); break;
-        }
-        return { start, end };
-    }
-
-    function renderPresetList() {
-        const list = document.getElementById('drbPresetList');
-        list.innerHTML = '';
-        DATE_PRESETS.forEach(p => {
-            const row = document.createElement('div');
-            row.className = 'drb-preset-row' + (selectedPreset === p.key ? ' active' : '');
-            row.innerHTML = `<span>${p.label}</span><span class="drb-radio"></span>`;
-            row.onclick = () => {
-                selectedPreset = p.key;
-                const range = computeRangeFromPreset(p.key, new Date());
-                customStart = range.start; customEnd = range.end;
-                renderPresetList();
-                renderCustomDates();
-            };
-            list.appendChild(row);
-        });
-    }
-
-    function renderCustomDates() {
-        document.getElementById('drbCustomStart').textContent = customStart ? fmtDate(customStart) : '-';
-        document.getElementById('drbCustomEnd').textContent = customEnd ? fmtDate(customEnd) : '-';
-    }
-
-    function stepCustomDate(which, dir) {
-        selectedPreset = null;
-        renderPresetList();
-        if (which === 'start') customStart.setDate(customStart.getDate() + dir);
-        else customEnd.setDate(customEnd.getDate() + dir);
-        renderCustomDates();
-    }
-
-    function openDateRangeModal() {
-        if (!customStart) {
-            const range = computeRangeFromPreset(selectedPreset || '7d', new Date());
-            customStart = range.start; customEnd = range.end;
-        }
-        renderPresetList();
-        renderCustomDates();
-        document.getElementById('dateRangeModalOverlay').style.display = 'flex';
-    }
-    function closeDateRangeModal(evt) {
-        if (evt && evt.target !== evt.currentTarget) return;
-        document.getElementById('dateRangeModalOverlay').style.display = 'none';
-    }
-
-    function applyDateRange() {
-        activeRangeStart = new Date(customStart);
-        activeRangeEnd = new Date(customEnd);
-        updateDateRangeLabel();
-        closeDateRangeModal();
-        if (activeStockCode) loadChartData(activeStockCode);
-    }
-
-    function updateDateRangeLabel() {
-        const preset = DATE_PRESETS.find(p => p.key === selectedPreset);
-        document.getElementById('drbLabel').textContent = preset
-            ? preset.label
-            : `${fmtDate(activeRangeStart)} – ${fmtDate(activeRangeEnd)}`;
-    }
-
-    function shiftRange(dir) {
-        const lengthDays = Math.round((activeRangeEnd - activeRangeStart) / 86400000) + 1;
-        activeRangeStart.setDate(activeRangeStart.getDate() + dir * lengthDays);
-        activeRangeEnd.setDate(activeRangeEnd.getDate() + dir * lengthDays);
-        selectedPreset = null;
-        updateDateRangeLabel();
-        if (activeStockCode) loadChartData(activeStockCode);
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-        const prevBtn = document.getElementById('drbPrev');
-        const nextBtn = document.getElementById('drbNext');
-        if (prevBtn) prevBtn.addEventListener('click', () => shiftRange(-1));
-        if (nextBtn) nextBtn.addEventListener('click', () => shiftRange(1));
-    });
-
-    (function initDefaultRange() {
-        const range = computeRangeFromPreset('7d', new Date());
-        activeRangeStart = range.start; activeRangeEnd = range.end;
-    })();
+    let activeTimeframe = '1m';
 
     // ══ Toggle cepat ke Watchlist lewat ikon bintang ══
     function toggleWatchlistStar(code, livePrice, dateStr) {
@@ -686,11 +574,10 @@
         document.getElementById('chartStockCode').textContent = code;
         document.getElementById('chartCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-        updateDateRangeLabel();
-        loadChartData(code);
+        loadChartData(code, activeTimeframe);
     }
 
-    function loadChartData(code) {
+    function loadChartData(code, timeframe) {
         const loadingEl = document.getElementById('chartLoading');
         const emptyEl = document.getElementById('chartEmpty');
         const canvas = document.getElementById('clickChart');
@@ -699,10 +586,7 @@
         emptyEl.style.display = 'none';
         canvas.style.display = 'block';
 
-        const startStr = toISO(activeRangeStart);
-        const endStr = toISO(activeRangeEnd);
-
-        fetch(`/chart-data/${code}?start=${startStr}&end=${endStr}`, { headers: { 'Accept': 'application/json' } })
+        fetch(`/chart-data/${code}?timeframe=${timeframe}`, { headers: { 'Accept': 'application/json' } })
             .then(res => res.json())
             .then(data => {
                 loadingEl.style.display = 'none';
@@ -887,24 +771,34 @@
         });
     }
 
+    document.querySelectorAll('.tf-btn').forEach(btn => {
+        btn.addEventListener('click', function () {
+            document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            activeTimeframe = this.dataset.tf;
+            if (activeStockCode) {
+                loadChartData(activeStockCode, activeTimeframe);
+            }
+        });
+    });
 </script>
 <style>
-    .date-range-bar { display:flex; align-items:center; justify-content:center; gap:1rem; }
-    .drb-nav { background:none; border:none; color:var(--muted); font-size:1.3rem; cursor:pointer; padding:0.2rem 0.6rem; line-height:1; }
-    .drb-nav:hover { color:var(--ink); }
-    .drb-display { display:flex; align-items:center; gap:0.4rem; background:none; border:none; color:var(--cyan); font-weight:600; font-size:0.9rem; cursor:pointer; white-space:nowrap; }
-    .drb-preset-list { max-height:45vh; overflow-y:auto; }
-    .drb-preset-row { display:flex; align-items:center; justify-content:space-between; padding:0.7rem 0.2rem; border-bottom:1px solid var(--border); cursor:pointer; font-size:0.88rem; color:var(--ink); }
-    .drb-preset-row:last-child { border-bottom:none; }
-    .drb-radio { width:18px; height:18px; border-radius:50%; border:2px solid var(--border); flex-shrink:0; }
-    .drb-preset-row.active .drb-radio { border-color:var(--cyan); background:var(--cyan); box-shadow: inset 0 0 0 3px var(--panel); }
-    .drb-preset-row.active { color: var(--cyan); }
-    .drb-custom-row { display:flex; gap:1rem; margin-top:0.8rem; padding-top:0.8rem; border-top:1px solid var(--border); }
-    .drb-custom-row > div { flex:1; }
-    .drb-custom-row label { display:block; font-size:0.7rem; color:var(--muted); margin-bottom:0.3rem; text-transform:uppercase; letter-spacing:0.03em; }
-    .drb-date-stepper { display:flex; align-items:center; justify-content:space-between; background:var(--panel-2); border:1px solid var(--border); border-radius:6px; padding:0.4rem 0.6rem; font-family:var(--mono); font-size:0.82rem; color: var(--ink); }
-    .drb-date-stepper button { background:none; border:none; color:var(--muted); font-size:1rem; cursor:pointer; padding:0 0.3rem; }
-    .drb-date-stepper button:hover { color: var(--ink); }
+    #kriteriaPencarianBody {
+        overflow: hidden;
+        max-height: 2000px;
+        transition: max-height 0.3s ease, opacity 0.2s ease, margin-top 0.2s ease;
+        opacity: 1;
+        margin-top: 1rem;
+    }
+    #kriteriaPencarianBody.collapsed {
+        max-height: 0;
+        opacity: 0;
+        margin-top: 0;
+    }
+    #kriteriaPencarianChevron.collapsed {
+        transform: rotate(-90deg);
+    }
+    .tf-btn.active { background: var(--cyan); color: #0a0e1a; border-color: var(--cyan); }
     .star-btn {
         background: none; border: none; cursor: pointer; font-size: 1.2rem; line-height: 1;
         color: var(--muted); padding: 0.15rem; transition: transform 0.15s, color 0.15s;
