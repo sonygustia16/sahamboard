@@ -94,6 +94,28 @@
                 </div>
             </div>
 
+            {{-- Top Value Tracker: lihat saham mana yang sering/baru masuk Top-N value transaksi --}}
+            <div style="margin-top:1rem; padding:0.7rem 0.9rem; background:var(--panel-2); border:1px solid var(--border); border-radius:8px; display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap;">
+                <input type="checkbox" name="top_value" value="1" id="topValueCheckbox"
+                       {{ ($topValue ?? '') === '1' ? 'checked' : '' }}
+                       onchange="document.getElementById('topNWrap').style.display = this.checked ? 'flex' : 'none';"
+                       style="width:16px; height:16px; accent-color: var(--cyan); cursor:pointer;">
+                <label for="topValueCheckbox" style="cursor:pointer; font-size:0.85rem; color:var(--ink); margin:0;">
+                    🏆 <strong>Top Value Tracker</strong>
+                    <span style="color:var(--muted); font-size:0.75rem; display:block;">
+                        Lihat saham mana yang sering & mana yang baru masuk Top-N Value transaksi harian, dalam rentang tanggal di atas (default 30 hari terakhir jika kosong)
+                    </span>
+                </label>
+                <div id="topNWrap" style="display:{{ ($topValue ?? '') === '1' ? 'flex' : 'none' }}; align-items:center; gap:0.4rem; margin-left:auto;">
+                    <label style="font-size:0.75rem; color:var(--muted); margin:0;">Top N:</label>
+                    <select name="top_n" style="background:var(--bg); border:1px solid var(--border); color:var(--ink); border-radius:6px; padding:0.3rem 0.5rem; font-family:var(--mono); font-size:0.8rem;">
+                        @foreach([10, 20, 30, 50, 100] as $n)
+                            <option value="{{ $n }}" @selected(($topN ?? 30) == $n)>{{ $n }}</option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
+
             <div class="action-row">
                 <button type="submit" class="btn btn-primary">Cari / Filter</button>
                 <a href="{{ route('index') }}" class="btn btn-ghost">Reset</a>
@@ -162,16 +184,70 @@
         </div>
     </div>
 
-    {{-- Info banner — sekarang menampilkan info pagination --}}
+    {{-- Info banner --}}
     <div class="info-banner">
-        💡 Menampilkan
-        <strong>{{ $rows->firstItem() ?? 0 }}–{{ $rows->lastItem() ?? 0 }}</strong>
-        dari <strong>{{ number_format($rows->total()) }}</strong> data
-        @if($rows->lastPage() > 1)
-            &nbsp;·&nbsp; Halaman <strong>{{ $rows->currentPage() }}</strong> dari <strong>{{ $rows->lastPage() }}</strong>
+        @if(($topValue ?? '') === '1')
+            💡 Menampilkan <strong>{{ $rows->firstItem() ?? 0 }}–{{ $rows->lastItem() ?? 0 }}</strong>
+            dari <strong>{{ number_format($rows->total()) }}</strong> saham unik yang pernah masuk
+            <strong>Top {{ $topN }}</strong> Value &nbsp;·&nbsp;
+            Periode <strong>{{ \Illuminate\Support\Carbon::parse($startDate)->format('d M y') }}</strong> –
+            <strong>{{ \Illuminate\Support\Carbon::parse($finishDate)->format('d M y') }}</strong>
+            ({{ $totalHariTrading }} hari trading)
+            @if($rows->lastPage() > 1)
+                &nbsp;·&nbsp; Halaman <strong>{{ $rows->currentPage() }}</strong> dari <strong>{{ $rows->lastPage() }}</strong>
+            @endif
+        @else
+            💡 Menampilkan
+            <strong>{{ $rows->firstItem() ?? 0 }}–{{ $rows->lastItem() ?? 0 }}</strong>
+            dari <strong>{{ number_format($rows->total()) }}</strong> data
+            @if($rows->lastPage() > 1)
+                &nbsp;·&nbsp; Halaman <strong>{{ $rows->currentPage() }}</strong> dari <strong>{{ $rows->lastPage() }}</strong>
+            @endif
         @endif
     </div>
 
+@if(($topValue ?? '') === '1')
+    {{-- ══ TABEL MODE: Top Value Tracker ══ --}}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width:50px;">No</th>
+                    <th>Stock Code</th>
+                    <th>Muncul di Top{{ $topN }}</th>
+                    <th>% Hari</th>
+                    <th>Status</th>
+                    <th>First Seen</th>
+                    <th>Last Seen</th>
+                </tr>
+            </thead>
+            <tbody>
+                @forelse ($rows as $row)
+                    @php
+                        $no = ($rows->currentPage() - 1) * $rows->perPage() + $loop->iteration;
+                        $statusMap = [
+                            'langganan' => ['🟢 Langganan', 'text-green', null],
+                            'baru'      => ['🆕 Baru', null, '#fbbf24'],
+                            'kadang'    => ['⚪ Kadang', 'text-gray', null],
+                        ];
+                        [$statusLabel, $statusClass, $statusInlineColor] = $statusMap[$row->status] ?? ['-', 'text-gray', null];
+                    @endphp
+                    <tr class="clickable-row" data-code="{{ $row->stock_code }}" onclick="selectStock('{{ $row->stock_code }}')" style="cursor:pointer;">
+                        <td class="text-center"><strong>{{ $no }}</strong></td>
+                        <td><span class="code-pill">{{ $row->stock_code }}</span></td>
+                        <td class="text-center">{{ $row->freq }} / {{ $totalHariTrading }} hari</td>
+                        <td class="text-center">{{ $row->pct }}%</td>
+                        <td class="text-center {{ $statusClass }}" @if($statusInlineColor) style="color:{{ $statusInlineColor }};" @endif>{{ $statusLabel }}</td>
+                        <td>{{ \Illuminate\Support\Carbon::parse($row->first_seen)->format('d M y') }}</td>
+                        <td>{{ \Illuminate\Support\Carbon::parse($row->last_seen)->format('d M y') }}</td>
+                    </tr>
+                @empty
+                    <tr class="empty-row"><td colspan="7">Tidak ada data pada rentang tanggal ini.</td></tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+@else
     <div class="table-wrap">
         <table>
             <thead>
@@ -241,8 +317,9 @@
             </tbody>
         </table>
     </div>
+@endif
 
-    {{-- Pagination — muncul hanya kalau lebih dari 1 halaman --}}
+    {{-- Pagination — muncul hanya kalau lebih dari 1 halaman (jalan untuk kedua mode tabel) --}}
     @if ($rows->lastPage() > 1)
         <div class="pagination-wrap">
             {{-- Prev --}}

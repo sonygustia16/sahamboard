@@ -31,7 +31,8 @@ class StockFilterController extends Controller
     {
         // Halaman Filter Lengkap: sengaja TIDAK mengaktifkan mode screening akumulasi,
         // supaya halaman ini tetap simpel & tidak terganggu logika screening.
-        return $this->handleFilterRequest($request, false, 'screens.index');
+        // Mode Top Value Tracker DIAKTIFKAN di sini.
+        return $this->handleFilterRequest($request, false, 'screens.index', true);
     }
 
     /**
@@ -50,12 +51,14 @@ class StockFilterController extends Controller
         return $this->handleFilterRequest($request, true, 'screens.screening');
     }
 
-    private function handleFilterRequest(Request $request, bool $allowScreening, string $viewName)
+    private function handleFilterRequest(Request $request, bool $allowScreening, string $viewName, bool $allowTopValue = false)
     {
         $stockCode   = $request->query('stock_code', '');
         $startDate   = $request->query('start_date', '');
         $finishDate  = $request->query('finish_date', '');
         $screening   = $allowScreening ? $request->query('screening', '') : '';
+        $topValue    = $allowTopValue ? $request->query('top_value', '') : ''; // '1' kalau checkbox dicentang
+        $topN        = $allowTopValue ? max(5, min(100, (int) $request->query('top_n', 30))) : 30;
 
         $filterPrevious  = $this->cleanNumber($request->query('previous', ''));
         $filterFrequency = $this->cleanNumber($request->query('frequency', ''));
@@ -73,7 +76,8 @@ class StockFilterController extends Controller
             || $filterFrequency != ''
             || $filterValue != ''
             || $filterNonRegularValue != ''
-            || $screening != '';
+            || $screening != ''
+            || $topValue != '';
 
         $screeningModes = ['akumulasi', 'akumulasi_nrv', 'akumulasi_ketat'];
 
@@ -81,6 +85,10 @@ class StockFilterController extends Controller
             return $this->handleAkumulasiScreening(
                 $screening, $stockCode, $finishDate, $startDate, $viewName
             );
+        }
+
+        if ($topValue === '1') {
+            return $this->handleTopValueTracker($stockCode, $startDate, $finishDate, $topN, $viewName);
         }
 
         // Inisialisasi query (pertahankan logika filter kamu)
@@ -141,6 +149,108 @@ class StockFilterController extends Controller
             'savedFilters'    => SavedFilter::orderBy('name')->get(),
             'screening'       => '',
             'screeningDate'   => null,
+            'topValue'        => '',
+            'topN'            => $topN,
+            'totalHariTrading' => 0,
+            'watchlistedCodes' => Watchlist::pluck('stock_code')->map(fn ($c) => strtoupper($c))->all(),
+        ]);
+    }
+
+    /**
+     * ── MODE: Top Value Tracker ──
+     * Lihat saham mana yang SERING dan mana yang BARU masuk Top-N Value
+     * transaksi harian, dalam rentang tanggal tertentu. Berguna untuk
+     * membedakan saham "langganan" likuiditas tinggi vs saham yang baru
+     * spike / baru dilirik market.
+     */
+    private function handleTopValueTracker(
+        string $stockCode,
+        string $startDate,
+        string $finishDate,
+        int $topN,
+        string $viewName
+    ) {
+        // Default rentang tanggal: 30 hari terakhir kalau user belum isi start/finish date.
+        if (empty($startDate) || empty($finishDate)) {
+            $finishDate = $finishDate ?: (RingkasanSaham::max('date') ?? now()->toDateString());
+            $startDate  = $startDate ?: \Illuminate\Support\Carbon::parse($finishDate)->subDays(30)->toDateString();
+        }
+
+        // Subquery: ranking value per tanggal (window function, aman di Postgres/Neon)
+        $ranked = DB::table('ringkasan_saham')
+            ->select('date', 'stock_code', 'value')
+            ->selectRaw('ROW_NUMBER() OVER (PARTITION BY date ORDER BY value DESC) as rn')
+            ->whereBetween('date', [$startDate, $finishDate]);
+
+        if (!empty($stockCode)) {
+            $ranked->where('stock_code', $stockCode);
+        }
+
+        // Total hari trading unik dalam rentang (buat hitung %)
+        $totalHariTrading = RingkasanSaham::query()
+            ->whereBetween('date', [$startDate, $finishDate])
+            ->distinct('date')
+            ->count('date');
+        $totalHariTrading = max(1, $totalHariTrading);
+
+        $aggregated = DB::query()
+            ->fromSub($ranked, 'ranked')
+            ->where('rn', '<=', $topN)
+            ->selectRaw('stock_code,
+                COUNT(*) as freq,
+                MIN(date) as first_seen,
+                MAX(date) as last_seen,
+                MAX(value) as max_value')
+            ->groupBy('stock_code')
+            ->orderByDesc('freq')
+            ->orderByDesc('max_value');
+
+        $perPage = 25;
+        $rows = $aggregated->paginate($perPage)->withQueryString();
+
+        // Klasifikasi status per baris (langganan / baru / kadang).
+        // "Baru" = kemunculan pertamanya jatuh di 20% akhir rentang tanggal (fresh entrant),
+        // atau total kemunculannya cuma 1-2 kali sepanjang rentang.
+        $rangeStartTs   = strtotime($startDate);
+        $rangeEndTs     = strtotime($finishDate);
+        $rangeSpan      = max(1, $rangeEndTs - $rangeStartTs);
+        $newThresholdTs = $rangeEndTs - (int) round($rangeSpan * 0.2);
+
+        $rows->getCollection()->transform(function ($row) use ($totalHariTrading, $newThresholdTs) {
+            $row->pct = round(($row->freq / $totalHariTrading) * 100, 1);
+            $firstSeenTs = strtotime($row->first_seen);
+
+            if ($row->pct >= 70) {
+                $row->status = 'langganan';
+            } elseif ($firstSeenTs >= $newThresholdTs || $row->freq <= 2) {
+                $row->status = 'baru';
+            } else {
+                $row->status = 'kadang';
+            }
+            return $row;
+        });
+
+        return view($viewName, [
+            'rows'             => $rows,
+            'livePriceCache'   => [],
+            'stockCode'        => $stockCode,
+            'startDate'        => $startDate,
+            'finishDate'       => $finishDate,
+            'filterPrevious'   => '',
+            'filterFrequency'  => '',
+            'filterValue'      => '',
+            'filterNonRegularValue' => '',
+            'opPrevious'       => '=',
+            'opFrequency'      => '=',
+            'opValue'          => '=',
+            'opNonRegularValue' => '=',
+            'isSearching'      => true,
+            'savedFilters'     => SavedFilter::orderBy('name')->get(),
+            'screening'        => '',
+            'screeningDate'    => null,
+            'topValue'         => '1',
+            'topN'             => $topN,
+            'totalHariTrading' => $totalHariTrading,
             'watchlistedCodes' => Watchlist::pluck('stock_code')->map(fn ($c) => strtoupper($c))->all(),
         ]);
     }
@@ -263,6 +373,9 @@ class StockFilterController extends Controller
             'savedFilters'     => SavedFilter::orderBy('name')->get(),
             'screening'        => $screening,
             'screeningDate'    => $rangeStart . ' s/d ' . $rangeFinish,
+            'topValue'         => '',
+            'topN'             => 30,
+            'totalHariTrading' => 0,
             'watchlistedCodes' => Watchlist::pluck('stock_code')->map(fn ($c) => strtoupper($c))->all(),
         ]);
     }
