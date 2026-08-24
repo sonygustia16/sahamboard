@@ -212,8 +212,12 @@
         <table>
             <thead>
                 <tr>
+                    <th style="width:36px;"></th>
                     <th style="width:50px;">No</th>
                     <th>Stock Code</th>
+                    <th>Previous</th>
+                    <th>Live Price</th>
+                    <th>Change</th>
                     <th>Muncul di Top{{ $topN }}</th>
                     <th>% Hari</th>
                     <th>Status</th>
@@ -231,10 +235,51 @@
                             'kadang'    => ['⚪ Kadang', 'text-gray', null],
                         ];
                         [$statusLabel, $statusClass, $statusInlineColor] = $statusMap[$row->status] ?? ['-', 'text-gray', null];
+
+                        $code = $row->stock_code;
+                        $livePrice = $livePriceCache[$code] ?? null;
+                        $previous = $row->previous ?? null;
+                        $changeText = '-';
+                        $changeClass = 'text-gray';
+                        $formattedLive = "<span class='status-chip'>Timeout/Limit</span>";
+                        $formattedPrevious = $previous !== null ? number_format($previous, 0, ',', '.') : '-';
+
+                        if ($livePrice !== null) {
+                            $formattedLive = number_format($livePrice, 0, ',', '.');
+
+                            if ($previous !== null && $previous > 0) {
+                                $diff = $livePrice - $previous;
+                                $pctChange = ($diff / $previous) * 100;
+
+                                if ($diff > 0) {
+                                    $changeText = '+' . number_format($diff, 0, ',', '.') . ' / +' . number_format($pctChange, 2) . '%';
+                                    $changeClass = 'text-green';
+                                } elseif ($diff < 0) {
+                                    $changeText = number_format($diff, 0, ',', '.') . ' / ' . number_format($pctChange, 2) . '%';
+                                    $changeClass = 'text-red';
+                                } else {
+                                    $changeText = '0 / 0%';
+                                }
+                            }
+                        }
+
+                        $isWatchlisted = in_array($code, $watchlistedCodes ?? [], true);
                     @endphp
-                    <tr class="clickable-row" data-code="{{ $row->stock_code }}" onclick="selectStock('{{ $row->stock_code }}')" style="cursor:pointer;">
+                    <tr class="clickable-row" data-code="{{ $code }}" onclick="selectStock('{{ $code }}')" style="cursor:pointer;">
+                        <td class="text-center" onclick="event.stopPropagation();">
+                            <button type="button"
+                                    class="star-btn {{ $isWatchlisted ? 'star-active' : '' }}"
+                                    id="star-{{ $code }}"
+                                    onclick="toggleWatchlistStar('{{ $code }}', {{ $livePrice ?? 'null' }}, '{{ $row->first_seen }}')"
+                                    title="{{ $isWatchlisted ? 'Hapus dari Watchlist' : 'Tambah ke Watchlist' }}">
+                                {{ $isWatchlisted ? '★' : '☆' }}
+                            </button>
+                        </td>
                         <td class="text-center"><strong>{{ $no }}</strong></td>
-                        <td><span class="code-pill">{{ $row->stock_code }}</span></td>
+                        <td><span class="code-pill">{{ $code }}</span></td>
+                        <td class="text-right">{{ $formattedPrevious }}</td>
+                        <td class="text-right live-cell">{!! $formattedLive !!}</td>
+                        <td class="text-center {{ $changeClass }}">{{ $changeText }}</td>
                         <td class="text-center">{{ $row->freq }} / {{ $totalHariTrading }} hari</td>
                         <td class="text-center">{{ $row->pct }}%</td>
                         <td class="text-center {{ $statusClass }}" @if($statusInlineColor) style="color:{{ $statusInlineColor }};" @endif>{{ $statusLabel }}</td>
@@ -242,7 +287,7 @@
                         <td>{{ \Illuminate\Support\Carbon::parse($row->last_seen)->format('d M y') }}</td>
                     </tr>
                 @empty
-                    <tr class="empty-row"><td colspan="7">Tidak ada data pada rentang tanggal ini.</td></tr>
+                    <tr class="empty-row"><td colspan="11">Tidak ada data pada rentang tanggal ini.</td></tr>
                 @endforelse
             </tbody>
         </table>

@@ -230,9 +230,38 @@ class StockFilterController extends Controller
             return $row;
         });
 
+        // "Previous" di tabel Top Value Tracker = harga Close saham itu tepat
+        // di tanggal First Seen (hari pertama dia masuk Top-N) — dipakai sebagai
+        // baseline buat hitung Change terhadap harga live sekarang, sama seperti
+        // logika "Entry (Close)" di Watchlist.
+        $stockCodesOnPage = $rows->pluck('stock_code')->all();
+        $firstSeenByCode  = $rows->pluck('first_seen', 'stock_code')->all();
+
+        $closeAtFirstSeen = [];
+        if (!empty($stockCodesOnPage)) {
+            $pairs = RingkasanSaham::query()
+                ->whereIn('stock_code', $stockCodesOnPage)
+                ->whereIn('date', array_values(array_unique($firstSeenByCode)))
+                ->get(['stock_code', 'date', 'close']);
+
+            foreach ($pairs as $p) {
+                if (($firstSeenByCode[$p->stock_code] ?? null) === $p->date) {
+                    $closeAtFirstSeen[$p->stock_code] = (float) $p->close;
+                }
+            }
+        }
+
+        $rows->getCollection()->transform(function ($row) use ($closeAtFirstSeen) {
+            $row->previous = $closeAtFirstSeen[$row->stock_code] ?? null;
+            return $row;
+        });
+
+        // Fetch harga live hanya untuk baris di halaman aktif saja (lebih ringan)
+        $livePriceCache = $this->yahoo->getLivePrices($stockCodesOnPage, 1);
+
         return view($viewName, [
             'rows'             => $rows,
-            'livePriceCache'   => [],
+            'livePriceCache'   => $livePriceCache,
             'stockCode'        => $stockCode,
             'startDate'        => $startDate,
             'finishDate'       => $finishDate,
