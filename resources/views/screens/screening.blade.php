@@ -189,19 +189,11 @@
                     <div class="drb-custom-row">
                         <div>
                             <label>Start</label>
-                            <div class="drb-date-stepper">
-                                <button type="button" onclick="stepCustomDate('start',-1)">&lsaquo;</button>
-                                <span id="drbCustomStart">-</span>
-                                <button type="button" onclick="stepCustomDate('start',1)">&rsaquo;</button>
-                            </div>
+                            <input type="date" id="drbCustomStart" class="drb-date-input" onchange="onCustomDateChange()">
                         </div>
                         <div>
                             <label>End</label>
-                            <div class="drb-date-stepper">
-                                <button type="button" onclick="stepCustomDate('end',-1)">&lsaquo;</button>
-                                <span id="drbCustomEnd">-</span>
-                                <button type="button" onclick="stepCustomDate('end',1)">&rsaquo;</button>
-                            </div>
+                            <input type="date" id="drbCustomEnd" class="drb-date-input" onchange="onCustomDateChange()">
                         </div>
                     </div>
                 </div>
@@ -592,6 +584,12 @@
     .drb-date-stepper { display:flex; align-items:center; justify-content:space-between; background:var(--panel-2); border:1px solid var(--border); border-radius:6px; padding:0.4rem 0.6rem; font-family:var(--mono); font-size:0.82rem; color: var(--ink); }
     .drb-date-stepper button { background:none; border:none; color:var(--muted); font-size:1rem; cursor:pointer; padding:0 0.3rem; }
     .drb-date-stepper button:hover { color: var(--ink); }
+    .drb-date-input {
+        width:100%; background:var(--panel-2); border:1px solid var(--border); border-radius:6px;
+        padding:0.4rem 0.6rem; font-family:var(--mono); font-size:0.82rem; color:var(--ink);
+        cursor:pointer; color-scheme: dark;
+    }
+    .drb-date-input:focus { outline:none; border-color: var(--cyan); }
     .star-btn {
         background: none; border: none; cursor: pointer; font-size: 1.2rem; line-height: 1;
         color: var(--muted); padding: 0.15rem; transition: transform 0.15s, color 0.15s;
@@ -957,17 +955,37 @@
         });
     }
 
-    function renderCustomDates() {
-        document.getElementById('drbCustomStart').textContent = customStart ? fmtDate(customStart) : '-';
-        document.getElementById('drbCustomEnd').textContent = customEnd ? fmtDate(customEnd) : '-';
+    // Format Date -> 'YYYY-MM-DD' buat value input type=date (pakai komponen lokal,
+    // BUKAN toISOString, supaya tidak geser sehari akibat konversi ke UTC).
+    function toDateInputValue(d) {
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
     }
 
-    function stepCustomDate(which, dir) {
+    function renderCustomDates() {
+        document.getElementById('drbCustomStart').value = customStart ? toDateInputValue(customStart) : '';
+        document.getElementById('drbCustomEnd').value = customEnd ? toDateInputValue(customEnd) : '';
+    }
+
+    // Dipanggil saat user pilih tanggal langsung dari kalender native (input type=date)
+    function onCustomDateChange() {
+        const startVal = document.getElementById('drbCustomStart').value;
+        const endVal = document.getElementById('drbCustomEnd').value;
+        if (!startVal || !endVal) return;
+
         selectedPreset = null;
         renderPresetList();
-        if (which === 'start') customStart.setDate(customStart.getDate() + dir);
-        else customEnd.setDate(customEnd.getDate() + dir);
-        renderCustomDates();
+
+        customStart = new Date(startVal + 'T00:00:00');
+        customEnd = new Date(endVal + 'T00:00:00');
+
+        // Jaga urutan tetap benar kalau user pilih End sebelum Start
+        if (customStart > customEnd) {
+            [customStart, customEnd] = [customEnd, customStart];
+            renderCustomDates();
+        }
     }
 
     function openDateRangeModal() {
