@@ -91,9 +91,12 @@ class TopMoversController extends Controller
 
         foreach ($activeStocks as $stock) {
             $result = $this->broker->getBrokerSummary($stock->stock_code, [
-                'start_date' => $startDate,
-                'end_date'   => $endDate,
-                'all_data'   => true,
+                'start_date'   => $startDate,
+                'end_date'     => $endDate,
+                'all_data'     => true,
+                'broker_limit' => 20, // penting: kalau semua broker dijumlah, hasilnya selalu ~0
+                                      // (total beli pasar = total jual pasar). Batasi ke broker
+                                      // teraktif saja supaya kelihatan siapa net buy/sell dominan.
             ]);
 
             $brokers = $result['brokers'] ?? [];
