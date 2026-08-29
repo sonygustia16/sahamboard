@@ -11,6 +11,7 @@ use App\Http\Controllers\MoneyManagementController;
 use App\Http\Controllers\WatchlistController;
 use App\Http\Middleware\EnsureAuthenticated;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\TopMoversController;
 
 /*
 |--------------------------------------------------------------------------
@@ -35,6 +36,7 @@ Route::middleware(EnsureAuthenticated::class)->group(function () {
     Route::get('/chart-data/{stockCode}', [StockFilterController::class, 'chartData'])->name('chart-data');
     Route::get('/analysis', [StockAnalysisController::class, 'index'])->name('analysis.index');
     Route::get('/watchlist', [WatchlistController::class, 'index'])->name('watchlist.index');
+    Route::get('/top-movers', [TopMoversController::class, 'index'])->name('top-movers.index');
 
     // Broker Summary & Broker Flow Overlay — dipanggil via fetch() dari screening.blade.php
     Route::get('/broker-summary/{stockCode}', [BrokerSummaryController::class, 'show'])->name('broker-summary.show');

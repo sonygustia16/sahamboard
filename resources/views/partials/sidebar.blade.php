@@ -18,6 +18,9 @@
     <a href="{{ route('screening.index') }}" class="nav-link {{ request()->routeIs('screening.*') ? 'active' : '' }}">
         Screening
     </a>
+    <a href="{{ route('top-movers.index') }}" class="nav-link {{ request()->routeIs('top-movers.*') ? 'active' : '' }}">
+    Top Movers
+    </a>
     <a href="{{ route('watchlist.index') }}" class="nav-link {{ request()->routeIs('watchlist.*') ? 'active' : '' }}" style="position:relative;">
         Watchlist
         <span id="watchlistAlertBadge" style="display:none; position:absolute; right:0.6rem; top:50%; transform:translateY(-50%); background:var(--loss); color:#fff; font-family:var(--mono); font-size:0.65rem; font-weight:700; border-radius:10px; padding:0.05rem 0.45rem;"></span>
