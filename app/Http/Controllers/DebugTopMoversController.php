@@ -59,7 +59,6 @@ class DebugTopMoversController extends Controller
                 $brokerResult = $broker->getBrokerSummary($topStock->stock_code, [
                     'start_date'   => $latestDate,
                     'end_date'     => $latestDate,
-                    'all_data'     => true,
                     'broker_limit' => 20,
                 ]);
             } catch (\Throwable $e) {

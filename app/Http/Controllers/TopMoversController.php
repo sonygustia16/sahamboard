@@ -93,10 +93,10 @@ class TopMoversController extends Controller
             $result = $this->broker->getBrokerSummary($stock->stock_code, [
                 'start_date'   => $startDate,
                 'end_date'     => $endDate,
-                'all_data'     => true,
-                'broker_limit' => 20, // penting: kalau semua broker dijumlah, hasilnya selalu ~0
-                                      // (total beli pasar = total jual pasar). Batasi ke broker
-                                      // teraktif saja supaya kelihatan siapa net buy/sell dominan.
+                'broker_limit' => 20, // penting: JANGAN pakai all_data=>true bersamaan, karena
+                                      // all_data=true membuat API mengabaikan broker_limit dan
+                                      // mengembalikan SEMUA broker (nval-nya jadi selalu ~0
+                                      // karena total beli pasar = total jual pasar).
             ]);
 
             $brokers = $result['brokers'] ?? [];
