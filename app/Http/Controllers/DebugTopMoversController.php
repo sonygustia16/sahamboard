@@ -26,7 +26,7 @@ class DebugTopMoversController extends Controller
         $topGainerRaw = RingkasanSaham::query()
             ->where('date', $latestDate)
             ->where('previous', '>', 0)
-            ->selectRaw('stock_code, close, previous, ((close - previous) / previous) * 100 as change_pct')
+            ->selectRaw('stock_code, close, previous, ((close - previous) * 100.0 / previous) as change_pct')
             ->orderBy('change_pct', 'desc')
             ->limit(5)
             ->get();
@@ -44,7 +44,7 @@ class DebugTopMoversController extends Controller
         // 4) Cek juga BBCA secara spesifik (yang kita tahu dari sample close != previous)
         $bbca = RingkasanSaham::where('date', $latestDate)
             ->where('stock_code', 'BBCA')
-            ->selectRaw('stock_code, close, previous, ((close - previous) / previous) * 100 as change_pct')
+            ->selectRaw('stock_code, close, previous, ((close - previous) * 100.0 / previous) as change_pct')
             ->first();
 
         // 5) Cek broker summary untuk 1 saham teraktif
@@ -57,9 +57,10 @@ class DebugTopMoversController extends Controller
         if ($topStock) {
             try {
                 $brokerResult = $broker->getBrokerSummary($topStock->stock_code, [
-                    'start_date' => $latestDate,
-                    'end_date'   => $latestDate,
-                    'all_data'   => true,
+                    'start_date'   => $latestDate,
+                    'end_date'     => $latestDate,
+                    'all_data'     => true,
+                    'broker_limit' => 20,
                 ]);
             } catch (\Throwable $e) {
                 $brokerError = $e->getMessage();
