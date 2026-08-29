@@ -12,6 +12,9 @@ use App\Http\Controllers\WatchlistController;
 use App\Http\Middleware\EnsureAuthenticated;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\TopMoversController;
+use App\Http\Controllers\DebugTopMoversController;
+
+Route::get('/debug-top-movers', [DebugTopMoversController::class, 'index']);
 
 /*
 |--------------------------------------------------------------------------
