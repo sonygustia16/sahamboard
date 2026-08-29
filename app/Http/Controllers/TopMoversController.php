@@ -58,7 +58,7 @@ class TopMoversController extends Controller
         return RingkasanSaham::query()
             ->where('date', $date)
             ->where('previous', '>', 0)
-            ->selectRaw('stock_code, close, previous, ((close - previous) / previous) * 100 as change_pct')
+            ->selectRaw('stock_code, close, previous, ((close - previous) * 100.0 / previous) as change_pct')
             ->orderBy('change_pct', $gainer ? 'desc' : 'asc')
             ->limit($limit)
             ->get();
