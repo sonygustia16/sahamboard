@@ -79,14 +79,20 @@ class DebugTopMoversController extends Controller
 
         foreach ($activeStocks as $s) {
             $r = $broker->getBrokerSummary($s->stock_code, [
-                'start_date'   => $latestDate,
-                'end_date'     => $latestDate,
-                'broker_limit' => 20,
+                'start_date' => $latestDate,
+                'end_date'   => $latestDate,
             ]);
             $brokers = $r['brokers'] ?? [];
             if (empty($brokers)) { $countEmpty++; continue; }
 
-            $nval = array_sum(array_map(fn($b) => (float)($b['nval'] ?? 0), $brokers));
+            $buyers  = array_filter($brokers, fn ($b) => ($b['nval'] ?? 0) > 0);
+            $sellers = array_filter($brokers, fn ($b) => ($b['nval'] ?? 0) < 0);
+            usort($buyers, fn ($a, $b) => ($b['nval'] ?? 0) <=> ($a['nval'] ?? 0));
+            usort($sellers, fn ($a, $b) => ($a['nval'] ?? 0) <=> ($b['nval'] ?? 0));
+            $buySum  = array_sum(array_map(fn ($b) => (float) ($b['nval'] ?? 0), array_slice($buyers, 0, 10)));
+            $sellSum = array_sum(array_map(fn ($b) => (float) ($b['nval'] ?? 0), array_slice($sellers, 0, 10)));
+            $nval = $buySum + $sellSum;
+
             if ($nval > 0) { $countBuy++; }
             elseif ($nval < 0) { $countSell++; $sampleDist[] = ['stock_code' => $s->stock_code, 'total_nval' => $nval]; }
             else { $countZero++; }

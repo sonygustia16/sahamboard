@@ -31,19 +31,26 @@ class TopMoversController extends Controller
     {
         $period = $request->query('period', 'daily') === 'weekly' ? 'weekly' : 'daily';
 
-        $latestDate = RingkasanSaham::max('date');
+        $availableLatest = RingkasanSaham::max('date');
 
-        $topGainer = $this->topMovers($latestDate, true);
-        $topLoser  = $this->topMovers($latestDate, false);
+        // Tanggal acuan: dari filter user kalau ada & valid, else tanggal terbaru.
+        // Divalidasi terhadap tanggal yang BENERAN ada datanya di ringkasan_saham,
+        // supaya tidak error kalau user pilih tanggal libur/weekend/belum ada data.
+        $requestedDate = $request->query('date');
+        $refDate = $this->resolveValidDate($requestedDate, $availableLatest);
+
+        $topGainer = $this->topMovers($refDate, true);
+        $topLoser  = $this->topMovers($refDate, false);
 
         $startDate = $period === 'weekly'
-            ? $this->tradingDaysAgo($latestDate, self::WEEKLY_TRADING_DAYS)
-            : $latestDate;
+            ? $this->tradingDaysAgo($refDate, self::WEEKLY_TRADING_DAYS)
+            : $refDate;
 
-        [$topAkum, $topDist] = $this->topAccDist($latestDate, $startDate, $latestDate);
+        [$topAkum, $topDist] = $this->topAccDist($refDate, $startDate, $refDate);
 
         return view('screens.top_movers', [
-            'date'      => $latestDate,
+            'date'      => $refDate,
+            'latestDate'=> $availableLatest,
             'period'    => $period,
             'startDate' => $startDate,
             'topGainer' => $topGainer,
@@ -51,6 +58,27 @@ class TopMoversController extends Controller
             'topAkum'   => $topAkum,
             'topDist'   => $topDist,
         ]);
+    }
+
+    /**
+     * Pastikan tanggal yang diminta user beneran punya data di ringkasan_saham.
+     * Kalau tidak ada (mis. weekend/libur bursa/belum ditarik), mundur ke tanggal
+     * terdekat sebelumnya yang ada datanya. Kalau kosong sama sekali, pakai tanggal terbaru.
+     */
+    private function resolveValidDate(?string $requestedDate, string $fallback): string
+    {
+        if (empty($requestedDate)) {
+            return $fallback;
+        }
+
+        $exists = RingkasanSaham::where('date', $requestedDate)->exists();
+        if ($exists) {
+            return $requestedDate;
+        }
+
+        $nearest = RingkasanSaham::where('date', '<=', $requestedDate)->max('date');
+
+        return $nearest ?: $fallback;
     }
 
     private function topMovers(string $date, bool $gainer, int $limit = 10)
@@ -87,24 +115,45 @@ class TopMoversController extends Controller
             ->groupBy('stock_code')
             ->pluck('total_value', 'stock_code');
 
+        $stockCodes = $activeStocks->pluck('stock_code')->all();
+
+        // PENTING: jangan pakai broker_limit di sini. API mengurutkan broker dari
+        // net value TERBESAR ke terkecil, jadi broker_limit=N cuma ambil N broker
+        // net-BUY terbesar — broker net-SELL besar (di ujung daftar) malah kepotong,
+        // sehingga hasilnya selalu keliatan "net buy semua". Ambil SEMUA broker,
+        // baru kita pisahkan top buyer & top seller sendiri di bawah.
+        $batchResults = $this->broker->getBrokerSummaryBatch($stockCodes, [
+            'start_date' => $startDate,
+            'end_date'   => $endDate,
+        ]);
+
+        $topBrokersEach = 10; // berapa broker teratas dari tiap sisi (buy & sell) yang dihitung
         $rows = collect();
 
         foreach ($activeStocks as $stock) {
-            $result = $this->broker->getBrokerSummary($stock->stock_code, [
-                'start_date'   => $startDate,
-                'end_date'     => $endDate,
-                'broker_limit' => 20, // penting: JANGAN pakai all_data=>true bersamaan, karena
-                                      // all_data=true membuat API mengabaikan broker_limit dan
-                                      // mengembalikan SEMUA broker (nval-nya jadi selalu ~0
-                                      // karena total beli pasar = total jual pasar).
-            ]);
-
+            $result  = $batchResults[$stock->stock_code] ?? null;
             $brokers = $result['brokers'] ?? [];
             if (empty($brokers)) {
                 continue;
             }
 
-            $totalNval = array_sum(array_map(fn ($b) => (float) ($b['nval'] ?? 0), $brokers));
+            // Pisahkan net BUYER (nval positif) & net SELLER (nval negatif), lalu
+            // ambil yang paling besar dari masing-masing sisi — supaya sinyal Acc/Dist
+            // mencerminkan aktivitas broker BESAR, bukan rata-rata seluruh pasar
+            // (yang otomatis selalu ~0 kalau dijumlah semua).
+            $buyers  = array_filter($brokers, fn ($b) => ($b['nval'] ?? 0) > 0);
+            $sellers = array_filter($brokers, fn ($b) => ($b['nval'] ?? 0) < 0);
+
+            usort($buyers, fn ($a, $b) => ($b['nval'] ?? 0) <=> ($a['nval'] ?? 0));
+            usort($sellers, fn ($a, $b) => ($a['nval'] ?? 0) <=> ($b['nval'] ?? 0)); // paling negatif duluan
+
+            $topBuyers  = array_slice($buyers, 0, $topBrokersEach);
+            $topSellers = array_slice($sellers, 0, $topBrokersEach);
+
+            $buySum  = array_sum(array_map(fn ($b) => (float) ($b['nval'] ?? 0), $topBuyers));
+            $sellSum = array_sum(array_map(fn ($b) => (float) ($b['nval'] ?? 0), $topSellers)); // sudah negatif
+
+            $totalNval = $buySum + $sellSum; // skor bersih dari broker-broker besar saja
             if ($totalNval == 0) {
                 continue;
             }
