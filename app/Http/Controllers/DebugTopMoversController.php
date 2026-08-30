@@ -66,6 +66,32 @@ class DebugTopMoversController extends Controller
             }
         }
 
+        // 6) Scan cepat 40 saham teraktif (persis logika TopMoversController), hitung
+        //    berapa yang net buy vs net sell vs gagal, untuk pastikan Top Dist kosong
+        //    itu wajar (memang tidak ada net-sell) bukan karena bug.
+        $activeStocks = RingkasanSaham::where('date', $latestDate)
+            ->orderByDesc('value')
+            ->limit(40)
+            ->get(['stock_code']);
+
+        $countBuy = 0; $countSell = 0; $countEmpty = 0; $countZero = 0;
+        $sampleDist = [];
+
+        foreach ($activeStocks as $s) {
+            $r = $broker->getBrokerSummary($s->stock_code, [
+                'start_date'   => $latestDate,
+                'end_date'     => $latestDate,
+                'broker_limit' => 20,
+            ]);
+            $brokers = $r['brokers'] ?? [];
+            if (empty($brokers)) { $countEmpty++; continue; }
+
+            $nval = array_sum(array_map(fn($b) => (float)($b['nval'] ?? 0), $brokers));
+            if ($nval > 0) { $countBuy++; }
+            elseif ($nval < 0) { $countSell++; $sampleDist[] = ['stock_code' => $s->stock_code, 'total_nval' => $nval]; }
+            else { $countZero++; }
+        }
+
         return response()->json([
             'app_version_marker'  => 'debug-v2-with-order-by-check',
             'latest_date'         => $latestDate,
@@ -83,6 +109,13 @@ class DebugTopMoversController extends Controller
                 'total_nval' => array_sum(array_map(fn($b) => (float)($b['nval'] ?? 0), $brokerResult['brokers'] ?? [])),
             ] : null,
             'broker_error'        => $brokerError,
+            'scan_40_stocks_stats' => [
+                'net_buy_count'   => $countBuy,
+                'net_sell_count'  => $countSell,
+                'net_zero_count'  => $countZero,
+                'empty_or_failed' => $countEmpty,
+                'sample_sell_stocks' => $sampleDist,
+            ],
         ], 200, [], JSON_PRETTY_PRINT);
     }
 }
