@@ -2,31 +2,25 @@
 
 @section('title', 'Top Movers')
 @section('page-title', 'Top Movers')
-@section('page-subtitle', $period === 'weekly'
-    ? 'Akumulasi broker ' . \Illuminate\Support\Carbon::parse($startDate)->format('d M') . ' – ' . \Illuminate\Support\Carbon::parse($date)->format('d M Y')
-    : 'Snapshot broker harian · ' . \Illuminate\Support\Carbon::parse($date)->format('d M Y') . ($date !== $latestDate ? ' (data historis)' : ''))
+@section('page-subtitle', 'Akumulasi broker ' . \Illuminate\Support\Carbon::parse($startDate)->format('d M Y') . ' – ' . \Illuminate\Support\Carbon::parse($endDate)->format('d M Y') . ($endDate !== $latestDate ? ' (data historis)' : ''))
 
 @section('content')
 
-<div style="display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap; margin-bottom:1.2rem;">
-    <div style="display:flex; gap:0.5rem;">
-        <a href="{{ route('top-movers.index', array_merge(request()->query(), ['period' => 'daily'])) }}"
-           class="btn {{ $period === 'daily' ? 'btn-primary' : 'btn-ghost' }}">Harian</a>
-        <a href="{{ route('top-movers.index', array_merge(request()->query(), ['period' => 'weekly'])) }}"
-           class="btn {{ $period === 'weekly' ? 'btn-primary' : 'btn-ghost' }}">Mingguan (5 Hari)</a>
-    </div>
+<form method="GET" action="{{ route('top-movers.index') }}" style="display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap; margin-bottom:1.2rem;">
+    <label style="color:var(--muted); font-size:0.8rem;">Dari:</label>
+    <input type="date" name="start_date" value="{{ $startDate }}" max="{{ $latestDate }}"
+           style="background:var(--panel-2); border:1px solid var(--border); color:var(--ink); border-radius:6px; padding:0.35rem 0.6rem; font-family:var(--mono); font-size:0.8rem;">
 
-    <form method="GET" action="{{ route('top-movers.index') }}" style="display:flex; gap:0.5rem; align-items:center;">
-        <input type="hidden" name="period" value="{{ $period }}">
-        <label style="color:var(--muted); font-size:0.8rem;">Tanggal:</label>
-        <input type="date" name="date" value="{{ $date }}" max="{{ $latestDate }}"
-               onchange="this.form.submit()"
-               style="background:var(--panel-2); border:1px solid var(--border); color:var(--ink); border-radius:6px; padding:0.35rem 0.6rem; font-family:var(--mono); font-size:0.8rem;">
-        @if($date !== $latestDate)
-            <a href="{{ route('top-movers.index', ['period' => $period]) }}" class="btn btn-ghost" style="padding:0.35rem 0.7rem; font-size:0.75rem;">Ke Terbaru</a>
-        @endif
-    </form>
-</div>
+    <label style="color:var(--muted); font-size:0.8rem;">Sampai:</label>
+    <input type="date" name="end_date" value="{{ $endDate }}" max="{{ $latestDate }}"
+           style="background:var(--panel-2); border:1px solid var(--border); color:var(--ink); border-radius:6px; padding:0.35rem 0.6rem; font-family:var(--mono); font-size:0.8rem;">
+
+    <button type="submit" class="btn btn-primary" style="padding:0.4rem 1rem; font-size:0.8rem;">Terapkan</button>
+
+    @if($endDate !== $latestDate || $startDate !== \Illuminate\Support\Carbon::parse($latestDate)->subWeekdays(5)->toDateString())
+        <a href="{{ route('top-movers.index') }}" class="btn btn-ghost" style="padding:0.4rem 0.8rem; font-size:0.75rem;">Reset ke Terbaru</a>
+    @endif
+</form>
 
 <div class="top-movers-grid">
 

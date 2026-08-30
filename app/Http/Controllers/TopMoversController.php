@@ -29,34 +29,40 @@ class TopMoversController extends Controller
 
     public function index(Request $request)
     {
-        $period = $request->query('period', 'daily') === 'weekly' ? 'weekly' : 'daily';
-
         $availableLatest = RingkasanSaham::max('date');
 
-        // Tanggal acuan: dari filter user kalau ada & valid, else tanggal terbaru.
-        // Divalidasi terhadap tanggal yang BENERAN ada datanya di ringkasan_saham,
-        // supaya tidak error kalau user pilih tanggal libur/weekend/belum ada data.
-        $requestedDate = $request->query('date');
-        $refDate = $this->resolveValidDate($requestedDate, $availableLatest);
+        // Rentang tanggal fleksibel dari user. Default: end = tanggal terbaru,
+        // start = 5 hari bursa sebelum end (mirip mode "Mingguan" sebelumnya),
+        // tapi sekarang user bebas atur sendiri berapa hari pun mau dilihat.
+        $requestedEnd   = $request->query('end_date');
+        $requestedStart = $request->query('start_date');
 
-        $topGainer = $this->topMovers($refDate, true);
-        $topLoser  = $this->topMovers($refDate, false);
+        $endDate = $this->resolveValidDate($requestedEnd, $availableLatest);
 
-        $startDate = $period === 'weekly'
-            ? $this->tradingDaysAgo($refDate, self::WEEKLY_TRADING_DAYS)
-            : $refDate;
+        if (!empty($requestedStart)) {
+            $startDate = $this->resolveValidDate($requestedStart, $this->tradingDaysAgo($endDate, self::WEEKLY_TRADING_DAYS));
+            // Jaga-jaga kalau user kebalik isi start > end.
+            if ($startDate > $endDate) {
+                [$startDate, $endDate] = [$endDate, $startDate];
+            }
+        } else {
+            $startDate = $this->tradingDaysAgo($endDate, self::WEEKLY_TRADING_DAYS);
+        }
 
-        [$topAkum, $topDist] = $this->topAccDist($refDate, $startDate, $refDate);
+        $topGainer = $this->topMovers($endDate, true);
+        $topLoser  = $this->topMovers($endDate, false);
+
+        [$topAkum, $topDist] = $this->topAccDist($endDate, $startDate, $endDate);
 
         return view('screens.top_movers', [
-            'date'      => $refDate,
-            'latestDate'=> $availableLatest,
-            'period'    => $period,
-            'startDate' => $startDate,
-            'topGainer' => $topGainer,
-            'topLoser'  => $topLoser,
-            'topAkum'   => $topAkum,
-            'topDist'   => $topDist,
+            'date'       => $endDate,
+            'startDate'  => $startDate,
+            'endDate'    => $endDate,
+            'latestDate' => $availableLatest,
+            'topGainer'  => $topGainer,
+            'topLoser'   => $topLoser,
+            'topAkum'    => $topAkum,
+            'topDist'    => $topDist,
         ]);
     }
 
