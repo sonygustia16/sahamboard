@@ -123,14 +123,15 @@ class TopMoversController extends Controller
 
         $stockCodes = $activeStocks->pluck('stock_code')->all();
 
-        // PENTING: jangan pakai broker_limit di sini. API mengurutkan broker dari
-        // net value TERBESAR ke terkecil, jadi broker_limit=N cuma ambil N broker
-        // net-BUY terbesar — broker net-SELL besar (di ujung daftar) malah kepotong,
-        // sehingga hasilnya selalu keliatan "net buy semua". Ambil SEMUA broker,
-        // baru kita pisahkan top buyer & top seller sendiri di bawah.
+        // PENTING: 'all_data' => true WAJIB ada supaya API benar-benar mengagregasi
+        // SELURUH rentang start_date..end_date (bukan cuma snapshot 1 hari terakhir).
+        // Ini juga otomatis membuat API balikin SEMUA broker tanpa terpotong — pas,
+        // karena kita mau pisahkan sendiri top buyer & top seller di bawah, bukan
+        // pakai broker_limit yang cuma ambil sisi net-buy terbesar.
         $batchResults = $this->broker->getBrokerSummaryBatch($stockCodes, [
             'start_date' => $startDate,
             'end_date'   => $endDate,
+            'all_data'   => true,
         ]);
 
         $topBrokersEach = 10; // berapa broker teratas dari tiap sisi (buy & sell) yang dihitung
