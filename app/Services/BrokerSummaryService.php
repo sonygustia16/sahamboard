@@ -75,7 +75,64 @@ class BrokerSummaryService
             return null;
         }
     }
+/**
+     * Ambil broker summary untuk BANYAK stock_code sekaligus secara PARALEL
+     * (pakai Http::pool, bukan loop satu-satu), supaya jauh lebih cepat dibanding
+     * memanggil getBrokerSummary() berulang di dalam foreach.
+     *
+     * Dipakai oleh TopMoversController yang perlu scan puluhan saham sekaligus
+     * (beda dari Broker Summary/Insider Transaction yang cuma butuh 1 saham per request).
+     *
+     * @param string[] $stockCodes
+     * @param array $options ['start_date','end_date','net','broker_limit','level_limit','all_data']
+     * @return array<string, array|null> keyed by stock_code, value = hasil json() atau null kalau gagal
+     */
+    public function getBrokerSummaryBatch(array $stockCodes, array $options = []): array
+    {
+        if (empty($this->apiKey) || empty($stockCodes)) {
+            return [];
+        }
 
+        $params = array_filter([
+            'start_date'   => $options['start_date']   ?? null,
+            'end_date'     => $options['end_date']      ?? null,
+            'net'          => $options['net']           ?? null,
+            'broker_limit' => $options['broker_limit']  ?? null,
+            'level_limit'  => $options['level_limit']   ?? null,
+            'all_data'     => $options['all_data']      ?? null,
+        ], fn ($v) => $v !== null);
+
+        try {
+            $responses = Http::pool(fn ($pool) => collect($stockCodes)->map(
+                fn ($code) => $pool->as($code)
+                    ->withHeaders($this->authHeaders())
+                    ->timeout(15)
+                    ->get("{$this->baseUrl}/{$code}", $params)
+            )->all());
+        } catch (\Throwable $e) {
+            Log::error('BrokerSummaryService::getBrokerSummaryBatch exception: ' . $e->getMessage());
+            return [];
+        }
+
+        $results = [];
+        foreach ($stockCodes as $code) {
+            $response = $responses[$code] ?? null;
+
+            if (!$response || $response->failed()) {
+                if ($response) {
+                    Log::warning("BrokerSummaryService::getBrokerSummaryBatch gagal fetch {$code}", [
+                        'status' => $response->status(),
+                    ]);
+                }
+                $results[$code] = null;
+                continue;
+            }
+
+            $results[$code] = $response->json();
+        }
+
+        return $results;
+    }
     /**
      * Broker Flow Overlay (dipakai untuk overlay garis broker di chart Value NR).
      *
