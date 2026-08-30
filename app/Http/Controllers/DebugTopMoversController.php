@@ -57,9 +57,8 @@ class DebugTopMoversController extends Controller
         if ($topStock) {
             try {
                 $brokerResult = $broker->getBrokerSummary($topStock->stock_code, [
-                    'start_date'   => $latestDate,
-                    'end_date'     => $latestDate,
-                    'broker_limit' => 20,
+                    'start_date' => $latestDate,
+                    'end_date'   => $latestDate,
                 ]);
             } catch (\Throwable $e) {
                 $brokerError = $e->getMessage();
@@ -115,6 +114,12 @@ class DebugTopMoversController extends Controller
                 'total_nval' => array_sum(array_map(fn($b) => (float)($b['nval'] ?? 0), $brokerResult['brokers'] ?? [])),
             ] : null,
             'broker_error'        => $brokerError,
+            'raw_nval_list_for_tested_stock' => $brokerResult
+                ? collect($brokerResult['brokers'] ?? [])
+                    ->map(fn ($b) => ['broker_code' => $b['broker_code'] ?? null, 'nval' => $b['nval'] ?? null])
+                    ->sortByDesc('nval')
+                    ->values()
+                : null,
             'scan_40_stocks_stats' => [
                 'net_buy_count'   => $countBuy,
                 'net_sell_count'  => $countSell,
