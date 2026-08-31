@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\RingkasanSaham;
 use App\Services\BrokerSummaryService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class TopMoversController extends Controller
 {
@@ -128,11 +129,15 @@ class TopMoversController extends Controller
         // Ini juga otomatis membuat API balikin SEMUA broker tanpa terpotong — pas,
         // karena kita mau pisahkan sendiri top buyer & top seller di bawah, bukan
         // pakai broker_limit yang cuma ambil sisi net-buy terbesar.
-        $batchResults = $this->broker->getBrokerSummaryBatch($stockCodes, [
-            'start_date' => $startDate,
-            'end_date'   => $endDate,
-            'all_data'   => true,
-        ]);
+        $cacheKey = 'top_movers_broker_batch:' . $startDate . ':' . $endDate . ':' . md5(implode(',', $stockCodes));
+
+        $batchResults = Cache::remember($cacheKey, now()->addHours(3), function () use ($stockCodes, $startDate, $endDate) {
+            return $this->broker->getBrokerSummaryBatch($stockCodes, [
+                'start_date' => $startDate,
+                'end_date'   => $endDate,
+                'all_data'   => true,
+            ]);
+        });
 
         $topBrokersEach = 10; // berapa broker teratas dari tiap sisi (buy & sell) yang dihitung
         $rows = collect();
@@ -191,7 +196,10 @@ class TopMoversController extends Controller
         if ($nvalPct >= self::BIG_THRESHOLD)    return 'Big Acc';
         if ($nvalPct <= -self::SUPER_THRESHOLD) return 'Super Dist';
         if ($nvalPct <= -self::BIG_THRESHOLD)   return 'Big Dist';
-        return '-';
+
+        // Di bawah threshold Big/Super, tetap tampilkan angka persennya (bukan cuma "-")
+        // supaya user tahu sinyalnya ADA tapi kecil, bukan tidak ada sama sekali.
+        return ($nvalPct >= 0 ? '+' : '') . number_format($nvalPct, 1) . '%';
     }
 
     private function tradingDaysAgo(string $refDate, int $tradingDays): string
