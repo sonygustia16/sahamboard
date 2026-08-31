@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\RingkasanSaham;
 use App\Services\BrokerSummaryService;
+use App\Services\YahooFinanceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 
@@ -22,10 +23,12 @@ class TopMoversController extends Controller
     const SCAN_LIMIT = 40;
 
     protected BrokerSummaryService $broker;
+    protected YahooFinanceService $yahoo;
 
-    public function __construct(BrokerSummaryService $broker)
+    public function __construct(BrokerSummaryService $broker, YahooFinanceService $yahoo)
     {
         $this->broker = $broker;
+        $this->yahoo  = $yahoo;
     }
 
     public function index(Request $request)
@@ -54,6 +57,25 @@ class TopMoversController extends Controller
         $topLoser  = $this->topMovers($endDate, false);
 
         [$topAkum, $topDist] = $this->topAccDist($endDate, $startDate, $endDate);
+
+        // Ambil harga live (Yahoo Finance) untuk SEMUA saham yang tampil di 4 tabel
+        // sekaligus dalam 1 batch, supaya kolom "Live Price" beneran real-time
+        // (bukan cuma harga close terakhir dari database).
+        $allCodes = collect()
+            ->merge($topGainer->pluck('stock_code'))
+            ->merge($topLoser->pluck('stock_code'))
+            ->merge($topAkum->pluck('stock_code'))
+            ->merge($topDist->pluck('stock_code'))
+            ->unique()
+            ->values()
+            ->all();
+
+        $livePriceCache = $this->yahoo->getLivePrices($allCodes, 1);
+
+        $topGainer = $this->attachLivePrice($topGainer, $livePriceCache);
+        $topLoser  = $this->attachLivePrice($topLoser, $livePriceCache);
+        $topAkum   = $this->attachLivePrice($topAkum, $livePriceCache);
+        $topDist   = $this->attachLivePrice($topDist, $livePriceCache);
 
         return view('screens.top_movers', [
             'date'       => $endDate,
@@ -86,6 +108,31 @@ class TopMoversController extends Controller
         $nearest = RingkasanSaham::where('date', '<=', $requestedDate)->max('date');
 
         return $nearest ?: $fallback;
+    }
+
+    /**
+     * Tempelkan harga live (dari YahooFinanceService) ke tiap baris koleksi.
+     * Kalau live price tidak tersedia (timeout/limit), fallback ke 'close' terakhir
+     * dari database supaya tabel tetap terisi (bukan kosong).
+     */
+    private function attachLivePrice($rows, array $livePriceCache)
+    {
+        return $rows->map(function ($row) use ($livePriceCache) {
+            $live = $livePriceCache[$row->stock_code] ?? null;
+            $row->live_price = $live ?? $row->close;
+            $row->has_live    = $live !== null;
+
+            if ($row->previous > 0) {
+                $diff = $row->live_price - $row->previous;
+                $row->diff       = $diff;
+                $row->change_pct = ($diff / $row->previous) * 100;
+            } else {
+                $row->diff       = 0;
+                $row->change_pct = 0;
+            }
+
+            return $row;
+        });
     }
 
     private function topMovers(string $date, bool $gainer, int $limit = 10)
@@ -177,6 +224,7 @@ class TopMoversController extends Controller
             $rows->push((object) [
                 'stock_code' => $stock->stock_code,
                 'close'      => $stock->close,
+                'previous'   => $stock->previous,
                 'total_nval' => $totalNval,
                 'nval_pct'   => $nvalPct,
                 'change_pct' => $changePct,

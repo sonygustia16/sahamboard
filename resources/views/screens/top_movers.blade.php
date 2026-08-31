@@ -25,60 +25,23 @@
 <div class="top-movers-grid">
 
     <div class="glass-card">
-        <h3><span class="accent-bar"></span>Top Gainer</h3>
-        <div class="table-wrap">
-            <table>
-                <thead><tr><th>Code</th><th class="text-right">Price</th><th class="text-right">Change (%)</th></tr></thead>
-                <tbody>
-                    @forelse ($topGainer as $row)
-                        <tr>
-                            <td><span class="code-pill">{{ $row->stock_code }}</span></td>
-                            <td class="text-right">{{ number_format($row->close, 0, ',', '.') }}</td>
-                            <td class="text-right text-green">{{ number_format($row->change_pct, 2) }}%</td>
-                        </tr>
-                    @empty
-                        <tr class="empty-row"><td colspan="3">Belum ada data</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <div class="glass-card">
-        <h3><span class="accent-bar"></span>Top Loser</h3>
-        <div class="table-wrap">
-            <table>
-                <thead><tr><th>Code</th><th class="text-right">Price</th><th class="text-right">Change (%)</th></tr></thead>
-                <tbody>
-                    @forelse ($topLoser as $row)
-                        <tr>
-                            <td><span class="code-pill">{{ $row->stock_code }}</span></td>
-                            <td class="text-right">{{ number_format($row->close, 0, ',', '.') }}</td>
-                            <td class="text-right text-red">{{ number_format($row->change_pct, 2) }}%</td>
-                        </tr>
-                    @empty
-                        <tr class="empty-row"><td colspan="3">Belum ada data</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <div class="glass-card">
         <h3><span class="accent-bar"></span>Top Akum (Broker Net Buy)</h3>
         <div class="table-wrap">
             <table>
-                <thead><tr><th>Code</th><th class="text-right">Price</th><th class="text-right">Change (%)</th><th class="text-right">Acc/Dist</th></tr></thead>
+                <thead><tr><th>Code</th><th class="text-right">Previous</th><th class="text-right">Live Price</th><th class="text-right">Change</th><th class="text-right">Acc/Dist</th></tr></thead>
                 <tbody>
                     @forelse ($topAkum as $row)
                         <tr>
                             <td><span class="code-pill">{{ $row->stock_code }}</span></td>
-                            <td class="text-right">{{ number_format($row->close, 0, ',', '.') }}</td>
-                            <td class="text-right {{ $row->change_pct >= 0 ? 'text-green' : 'text-red' }}">{{ number_format($row->change_pct, 2) }}%</td>
+                            <td class="text-right">{{ number_format($row->previous, 0, ',', '.') }}</td>
+                            <td class="text-right">{{ number_format($row->live_price, 0, ',', '.') }}</td>
+                            <td class="text-right {{ $row->change_pct >= 0 ? 'text-green' : 'text-red' }}">
+                                {{ $row->change_pct >= 0 ? '+' : '' }}{{ number_format($row->diff, 0, ',', '.') }} / {{ $row->change_pct >= 0 ? '+' : '' }}{{ number_format($row->change_pct, 2) }}%
+                            </td>
                             <td class="text-right"><span class="acc-badge acc-badge-buy">{{ $row->label }}</span></td>
                         </tr>
                     @empty
-                        <tr class="empty-row"><td colspan="4">Tidak ada sinyal akumulasi terdeteksi pada saham teraktif periode ini.</td></tr>
+                        <tr class="empty-row"><td colspan="5">Tidak ada sinyal akumulasi terdeteksi pada saham teraktif periode ini.</td></tr>
                     @endforelse
                 </tbody>
             </table>
@@ -89,17 +52,62 @@
         <h3><span class="accent-bar"></span>Top Dist (Broker Net Sell)</h3>
         <div class="table-wrap">
             <table>
-                <thead><tr><th>Code</th><th class="text-right">Price</th><th class="text-right">Change (%)</th><th class="text-right">Acc/Dist</th></tr></thead>
+                <thead><tr><th>Code</th><th class="text-right">Previous</th><th class="text-right">Live Price</th><th class="text-right">Change</th><th class="text-right">Acc/Dist</th></tr></thead>
                 <tbody>
                     @forelse ($topDist as $row)
                         <tr>
                             <td><span class="code-pill">{{ $row->stock_code }}</span></td>
-                            <td class="text-right">{{ number_format($row->close, 0, ',', '.') }}</td>
-                            <td class="text-right {{ $row->change_pct >= 0 ? 'text-green' : 'text-red' }}">{{ number_format($row->change_pct, 2) }}%</td>
+                            <td class="text-right">{{ number_format($row->previous, 0, ',', '.') }}</td>
+                            <td class="text-right">{{ number_format($row->live_price, 0, ',', '.') }}</td>
+                            <td class="text-right {{ $row->change_pct >= 0 ? 'text-green' : 'text-red' }}">
+                                {{ $row->change_pct >= 0 ? '+' : '' }}{{ number_format($row->diff, 0, ',', '.') }} / {{ $row->change_pct >= 0 ? '+' : '' }}{{ number_format($row->change_pct, 2) }}%
+                            </td>
                             <td class="text-right"><span class="acc-badge acc-badge-sell">{{ $row->label }}</span></td>
                         </tr>
                     @empty
-                        <tr class="empty-row"><td colspan="4">Tidak ada sinyal distribusi terdeteksi pada saham teraktif periode ini.</td></tr>
+                        <tr class="empty-row"><td colspan="5">Tidak ada sinyal distribusi terdeteksi pada saham teraktif periode ini.</td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="glass-card">
+        <h3><span class="accent-bar"></span>Top Gainer</h3>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Code</th><th class="text-right">Previous</th><th class="text-right">Live Price</th><th class="text-right">Change</th></tr></thead>
+                <tbody>
+                    @forelse ($topGainer as $row)
+                        <tr>
+                            <td><span class="code-pill">{{ $row->stock_code }}</span></td>
+                            <td class="text-right">{{ number_format($row->previous, 0, ',', '.') }}</td>
+                            <td class="text-right">{{ number_format($row->live_price, 0, ',', '.') }}</td>
+                            <td class="text-right text-green">+{{ number_format($row->diff, 0, ',', '.') }} / +{{ number_format($row->change_pct, 2) }}%</td>
+                        </tr>
+                    @empty
+                        <tr class="empty-row"><td colspan="4">Belum ada data</td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="glass-card">
+        <h3><span class="accent-bar"></span>Top Loser</h3>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Code</th><th class="text-right">Previous</th><th class="text-right">Live Price</th><th class="text-right">Change</th></tr></thead>
+                <tbody>
+                    @forelse ($topLoser as $row)
+                        <tr>
+                            <td><span class="code-pill">{{ $row->stock_code }}</span></td>
+                            <td class="text-right">{{ number_format($row->previous, 0, ',', '.') }}</td>
+                            <td class="text-right">{{ number_format($row->live_price, 0, ',', '.') }}</td>
+                            <td class="text-right text-red">{{ number_format($row->diff, 0, ',', '.') }} / {{ number_format($row->change_pct, 2) }}%</td>
+                        </tr>
+                    @empty
+                        <tr class="empty-row"><td colspan="4">Belum ada data</td></tr>
                     @endforelse
                 </tbody>
             </table>
@@ -109,7 +117,7 @@
 </div>
 
 <p style="color:var(--muted); font-size:0.72rem; margin-top:1rem;">
-    * Dihitung live dari data broker summary untuk saham-saham paling aktif (by value transaksi) pada tanggal terakhir. Hasil di-cache 3 jam untuk menghemat kuota API.
+    * Live Price dari Yahoo Finance (fallback ke Close terakhir kalau limit/timeout). Sinyal Acc/Dist dihitung dari data broker summary saham-saham paling aktif (by value transaksi) pada rentang tanggal dipilih. Hasil di-cache 3 jam untuk menghemat kuota API.
 </p>
 
 @endsection
