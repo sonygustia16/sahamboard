@@ -131,14 +131,18 @@
     .dd-chip b { font-family:var(--mono); }
 </style>
 <script>
-    const CFG = @json([
-        'candidates' => $candidates,
-        'dates'      => $dates,   // urut terbaru dulu; dates[0] = hari yang dilihat
-        'minRatio'   => $minRatio,
-        'minTotal'   => $minTotalM * 1e9,
-        'jumbo'      => $jumbo,
-        'url'        => route('done-detail.analyze', ['stockCode' => '__CODE__', 'date' => '__DATE__']),
-    ]);
+    @php
+        // dates: urut terbaru dulu, dates[0] = hari yang dilihat
+        $cfg = [
+            'candidates' => $candidates,
+            'dates'      => $dates,
+            'minRatio'   => $minRatio,
+            'minTotal'   => $minTotalM * 1e9,
+            'jumbo'      => $jumbo,
+            'url'        => route('done-detail.analyze', ['stockCode' => '__CODE__', 'date' => '__DATE__']),
+        ];
+    @endphp
+    const CFG = @json($cfg);
 
     // store[code][date] = ringkasan hari itu dari server
     const store = {};
