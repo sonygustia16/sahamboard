@@ -9,6 +9,11 @@
 
 @section('content')
 
+    <div style="display:flex; gap:0.5rem; margin-bottom:1rem; flex-wrap:wrap;">
+    <a href="{{ route('screening.index') }}" class="btn btn-primary">Screening Value NR</a>
+    <a href="{{ route('done-detail.index') }}" class="btn btn-ghost">Done Detail</a>
+</div>
+
     <div class="glass-card">
         <h3 id="kriteriaPencarianToggle" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between; user-select:none;" onclick="toggleKriteriaPencarian()">
             <span><span class="accent-bar"></span>Kriteria Pencarian</span>

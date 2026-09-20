@@ -13,6 +13,7 @@ use App\Http\Middleware\EnsureAuthenticated;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\TopMoversController;
 use App\Http\Controllers\DebugTopMoversController;
+use App\Http\Controllers\DoneDetailController;
 
 Route::get('/debug-top-movers', [DebugTopMoversController::class, 'index']);
 
@@ -36,6 +37,7 @@ Route::middleware(EnsureAuthenticated::class)->group(function () {
     Route::middleware('throttle:60,1')->group(function () {
     Route::get('/', [StockFilterController::class, 'index'])->name('index');
     Route::get('/screening', [StockFilterController::class, 'screening'])->name('screening.index');
+       Route::get('/screening/done-detail', [DoneDetailController::class, 'index'])->name('done-detail.index');
     Route::get('/chart-data/{stockCode}', [StockFilterController::class, 'chartData'])->name('chart-data');
     Route::get('/analysis', [StockAnalysisController::class, 'index'])->name('analysis.index');
     Route::get('/watchlist', [WatchlistController::class, 'index'])->name('watchlist.index');
@@ -48,6 +50,10 @@ Route::middleware(EnsureAuthenticated::class)->group(function () {
     // Transaksi Insider — dipanggil via fetch() dari screening.blade.php (tab di sebelah Broker Summary)
     Route::get('/insider-transaction/{stockCode}', [InsiderTransactionController::class, 'show'])->name('insider-transaction.show');
 });
+ Route::middleware('throttle:600,1')->get(
+           '/screening/done-detail/analyze/{stockCode}/{date}',
+           [DoneDetailController::class, 'analyze']
+       )->name('done-detail.analyze');
 
     Route::post('/filter-preset', [StockFilterController::class, 'storePreset'])->name('filter-preset.store');
     Route::delete('/filter-preset/{savedFilter}', [StockFilterController::class, 'destroyPreset'])->name('filter-preset.destroy');
