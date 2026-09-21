@@ -74,6 +74,6 @@ return [
 ],
     'arjum' => [
         'key' => env('BROKER_API_KEY'),
-        'done_detail_url' => env('ARJUM_DONE_DETAIL_URL', 'https://stock.arjum.com/api/done-detail'),
-    ],
+        'done_detail_url' => env('ARJUM_DONE_DETAIL_URL', 'https://stock.arjum.com/api/done-details'),
+        ],
 ];
